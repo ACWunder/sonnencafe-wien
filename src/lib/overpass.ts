@@ -27,10 +27,18 @@ export function buildOverpassQuery(): string {
 (
   node["amenity"="cafe"](${bbox});
   way["amenity"="cafe"](${bbox});
-  node["amenity"="restaurant"]["cuisine"~"coffee_shop|kaffeehaus|cafe",i](${bbox});
-  way["amenity"="restaurant"]["cuisine"~"coffee_shop|kaffeehaus|cafe",i](${bbox});
+  node["amenity"="coffee_shop"](${bbox});
+  way["amenity"="coffee_shop"](${bbox});
+  node["amenity"="bistro"](${bbox});
+  way["amenity"="bistro"](${bbox});
   node["shop"="coffee"](${bbox});
   way["shop"="coffee"](${bbox});
+  node["shop"="tea"](${bbox});
+  way["shop"="tea"](${bbox});
+  node["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch",i](${bbox});
+  way["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch",i](${bbox});
+  node["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus",i](${bbox});
+  way["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus",i](${bbox});
 );
 out body;
 >;
@@ -59,12 +67,14 @@ export async function fetchCafesFromOverpass(): Promise<Cafe[]> {
 // Tags that identify a café-type element (as opposed to plain geometry nodes
 // or entrance nodes that arrive in the response via `>; out body qt`)
 function isCafeElement(tags: Record<string, string>): boolean {
-  return (
-    tags.amenity === "cafe" ||
-    tags.shop === "coffee" ||
-    (tags.amenity === "restaurant" &&
-      /coffee_shop|kaffeehaus|cafe/i.test(tags.cuisine ?? ""))
-  );
+  if (["cafe", "coffee_shop", "bistro"].includes(tags.amenity ?? "")) return true;
+  if (["coffee", "tea"].includes(tags.shop ?? "")) return true;
+  if (/coffee_shop|espresso|cappuccino|kaffeehaus/i.test(tags.cuisine ?? "")) return true;
+  if (
+    /restaurant|bar/i.test(tags.amenity ?? "") &&
+    /coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch/i.test(tags.cuisine ?? "")
+  ) return true;
+  return false;
 }
 
 // For a Way polygon, find the midpoint of the edge that is farthest from the
