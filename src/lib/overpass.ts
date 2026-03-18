@@ -31,14 +31,20 @@ export function buildOverpassQuery(): string {
   way["amenity"="coffee_shop"](${bbox});
   node["amenity"="bistro"](${bbox});
   way["amenity"="bistro"](${bbox});
+  node["amenity"="ice_cream"](${bbox});
+  way["amenity"="ice_cream"](${bbox});
   node["shop"="coffee"](${bbox});
   way["shop"="coffee"](${bbox});
   node["shop"="tea"](${bbox});
   way["shop"="tea"](${bbox});
-  node["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch",i](${bbox});
-  way["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch",i](${bbox});
-  node["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus",i](${bbox});
-  way["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus",i](${bbox});
+  node["shop"="pastry"](${bbox});
+  way["shop"="pastry"](${bbox});
+  node["shop"="bakery"](${bbox});
+  way["shop"="bakery"](${bbox});
+  node["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch|teahouse|pastry|cake|breakfast",i](${bbox});
+  way["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch|teahouse|pastry|cake|breakfast",i](${bbox});
+  node["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|teahouse|pastry|cake|breakfast",i](${bbox});
+  way["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|teahouse|pastry|cake|breakfast",i](${bbox});
 );
 out body;
 >;
@@ -67,12 +73,12 @@ export async function fetchCafesFromOverpass(): Promise<Cafe[]> {
 // Tags that identify a café-type element (as opposed to plain geometry nodes
 // or entrance nodes that arrive in the response via `>; out body qt`)
 function isCafeElement(tags: Record<string, string>): boolean {
-  if (["cafe", "coffee_shop", "bistro"].includes(tags.amenity ?? "")) return true;
-  if (["coffee", "tea"].includes(tags.shop ?? "")) return true;
-  if (/coffee_shop|espresso|cappuccino|kaffeehaus/i.test(tags.cuisine ?? "")) return true;
+  if (["cafe", "coffee_shop", "bistro", "ice_cream"].includes(tags.amenity ?? "")) return true;
+  if (["coffee", "tea", "pastry", "bakery"].includes(tags.shop ?? "")) return true;
+  if (/coffee_shop|espresso|cappuccino|kaffeehaus|teahouse|pastry|cake|breakfast/i.test(tags.cuisine ?? "")) return true;
   if (
     /restaurant|bar/i.test(tags.amenity ?? "") &&
-    /coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch/i.test(tags.cuisine ?? "")
+    /coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch|teahouse|pastry|cake|breakfast/i.test(tags.cuisine ?? "")
   ) return true;
   return false;
 }
