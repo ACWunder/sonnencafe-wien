@@ -742,9 +742,9 @@ export default function Home() {
           />
 
           {hasTimeSlider && (
-            <div className="pointer-events-none absolute left-3 right-3 top-3 z-[620] md:top-4">
+            <div className="pointer-events-none absolute left-3 right-3 top-0 z-[620] md:top-1">
               <div className="min-w-0">
-                <div className="rounded-[18px] border border-white/80 bg-white/72 px-2.5 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
+                <div className="rounded-[18px] border border-white/90 bg-white px-2.5 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]">
                   <div className="pr-0">
                     <input
                       type="range"
@@ -758,7 +758,7 @@ export default function Home() {
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
                   </div>
-                  <div className="-mt-1.5 flex items-center justify-between px-2 text-[11px] font-medium text-orange-500/95">
+                  <div className="-mt-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
                     <span>{formatMinuteLabel(sunriseTime)}</span>
                     <span>{formatMinuteLabel(sunsetTime)}</span>
                   </div>
