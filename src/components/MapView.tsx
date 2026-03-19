@@ -648,7 +648,7 @@ export function MapView({
           id: "sunny-overlay",
           type: "fill",
           source: "sunny-overlay-source",
-          paint: { "fill-color": "#fde68a", "fill-opacity": 0.38 },
+          paint: { "fill-color": "#fde68a", "fill-opacity": 0.18 },
         }, before);
 
         // Raster shadow layer — opacity here is the only transparency applied;
