@@ -216,64 +216,26 @@ function registerMarkerImages(map: any) { // eslint-disable-line @typescript-esl
     return ctx.getImageData(0, 0, w, h);
   }
 
-  // ── Sunny marker: amber filled circle + white sun icon inside ──────────────
-  // 80×80 canvas @2x → displays as 40×40 CSS px at icon-size 1.0
-  function drawSunny(ctx: CanvasRenderingContext2D, cx: number, cy: number, selected: boolean) {
-    // drop shadow
-    ctx.shadowColor = "rgba(0,0,0,0.22)";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 3;
+  // ☀️ emoji rendered on canvas — uses the system emoji font (Apple on iOS/macOS)
+  // 80×80 @2x → displays as 40px at icon-size 1.0
+  map.addImage("cafe-sunny", mk(80, 80, (ctx, cx, cy) => {
+    ctx.font = "60px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("☀️", cx, cy + 3);
+  }), { pixelRatio: 2 });
 
-    // amber filled circle
-    ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2);
-    ctx.fillStyle = "#f59e0b"; ctx.fill();
-
-    ctx.shadowColor = "transparent";
-
-    // white border (thicker when selected)
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = selected ? 5.5 : 3.5;
-    ctx.stroke();
-
-    // white sun icon inside: small circle + 8 rays
-    ctx.strokeStyle = "white";
-    ctx.lineCap = "round";
-
-    // rays (from r=10 to r=18, inside the amber circle)
-    ctx.lineWidth = 2.5;
-    for (let i = 0; i < 8; i++) {
-      const a = (i * 45 * Math.PI) / 180;
-      ctx.beginPath();
-      ctx.moveTo(cx + 10 * Math.sin(a), cy - 10 * Math.cos(a));
-      ctx.lineTo(cx + 17 * Math.sin(a), cy - 17 * Math.cos(a));
-      ctx.stroke();
-    }
-
-    // center dot
-    ctx.beginPath(); ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
-    ctx.fillStyle = "white"; ctx.fill();
-  }
-
-  // ── Shade marker: slate filled circle ──────────────────────────────────────
-  // 64×64 canvas @2x → displays as 32×32 CSS px at icon-size 1.0
-  function drawShade(ctx: CanvasRenderingContext2D, cx: number, cy: number, selected: boolean) {
+  // Shade: slate circle with white outline + drop shadow
+  // 64×64 @2x → displays as 32px at icon-size 1.0
+  map.addImage("cafe-shade", mk(64, 64, (ctx, cx, cy) => {
     ctx.shadowColor = "rgba(0,0,0,0.22)";
     ctx.shadowBlur = 6;
     ctx.shadowOffsetY = 2;
-
-    ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2);
     ctx.fillStyle = "#475569"; ctx.fill();
-
     ctx.shadowColor = "transparent";
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = selected ? 5 : 3;
-    ctx.stroke();
-  }
-
-  map.addImage("cafe-sunny",     mk(80, 80, (ctx, cx, cy) => drawSunny(ctx, cx, cy, false)), { pixelRatio: 2 });
-  map.addImage("cafe-sunny-sel", mk(80, 80, (ctx, cx, cy) => drawSunny(ctx, cx, cy, true)),  { pixelRatio: 2 });
-  map.addImage("cafe-shade",     mk(64, 64, (ctx, cx, cy) => drawShade(ctx, cx, cy, false)), { pixelRatio: 2 });
-  map.addImage("cafe-shade-sel", mk(64, 64, (ctx, cx, cy) => drawShade(ctx, cx, cy, true)),  { pixelRatio: 2 });
+    ctx.strokeStyle = "white"; ctx.lineWidth = 3.5; ctx.stroke();
+  }), { pixelRatio: 2 });
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -632,15 +594,11 @@ export function MapView({
           type: "symbol",
           source: "cafes-source",
           layout: {
-            "icon-image": ["case",
-              ["get", "isSelected"],
-              ["case", ["get", "inShadow"], "cafe-shade-sel", "cafe-sunny-sel"],
-              ["case", ["get", "inShadow"], "cafe-shade",     "cafe-sunny"],
-            ],
+            "icon-image": ["case", ["get", "inShadow"], "cafe-shade", "cafe-sunny"],
             "icon-size": [
               "*",
-              ["interpolate", ["linear"], ["zoom"], 12, 0.38, 14, 0.5, 16, 0.62, 18, 0.75],
-              ["case", ["get", "isSelected"], 1.5, 1.0],
+              ["interpolate", ["linear"], ["zoom"], 12, 0.38, 14, 0.52, 16, 0.65, 18, 0.8],
+              ["case", ["get", "isSelected"], 1.6, 1.0],
             ],
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
@@ -824,16 +782,7 @@ function Legend() {
         Legende
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        {/* Sunny marker preview */}
-        <svg width="16" height="16" viewBox="0 0 16 16">
-          <circle cx="8" cy="8" r="7" fill="#f59e0b" stroke="white" strokeWidth="1.5"/>
-          {[0,45,90,135,180,225,270,315].map((a) => (
-            <line key={a} x1="8" y1="3.5" x2="8" y2="5.5"
-              stroke="white" strokeWidth="1" strokeLinecap="round"
-              transform={`rotate(${a},8,8)`} />
-          ))}
-          <circle cx="8" cy="8" r="2" fill="white"/>
-        </svg>
+        <span style={{ fontSize: 14, lineHeight: 1 }}>☀️</span>
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Sonnig</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
