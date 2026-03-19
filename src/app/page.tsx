@@ -669,6 +669,7 @@ export default function Home() {
             timeState={timeState}
             cafes={deferredCafesForMap}
             visibleCafeIds={visibleCafeIds}
+            sunRemaining={sunRemaining}
             selectedCafe={selectedCafe}
             onCafeSelect={setSelectedCafe}
             onSunRemaining={handleSunRemaining}

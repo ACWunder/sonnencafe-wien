@@ -83,6 +83,7 @@ const SHADOW_COORDS: [[number,number],[number,number],[number,number],[number,nu
 interface MapViewProps {
   timeState: TimeState;
   cafes: Cafe[];
+  sunRemaining: Record<string, number | null>;
   selectedCafe: Cafe | null;
   onCafeSelect: (cafe: Cafe | null) => void;
   onSunRemaining: (data: Record<string, number | null>) => void;
@@ -263,7 +264,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, visibleCafeIds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, visibleCafeIds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -282,6 +283,8 @@ export function MapView({
   // Stable refs so event handlers always see current prop values
   const cafesRef          = useRef<Cafe[]>(cafes);
   cafesRef.current        = cafes;
+  const sunRemainingRef   = useRef<Record<string, number | null>>(sunRemaining);
+  sunRemainingRef.current = sunRemaining;
   const selectedCafeRef   = useRef<Cafe | null>(selectedCafe);
   selectedCafeRef.current = selectedCafe;
   const onCafeSelectRef   = useRef(onCafeSelect);
@@ -323,7 +326,9 @@ export function MapView({
           geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
           properties: {
             id: cafe.id, name: cafe.name,
-            inShadow: shadowCacheRef.current.get(cafe.id) ?? true,
+            inShadow: Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id)
+              ? sunRemainingRef.current[cafe.id] === null
+              : (shadowCacheRef.current.get(cafe.id) ?? true),
             isSelected: cafe.id === selId,
           },
         }));
@@ -336,10 +341,23 @@ export function MapView({
     const sunPos = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
     const OFFSET_M = 10;
     const azRad  = (sunPos.azimuthDeg * Math.PI) / 180;
+    const allBuildings = Array.from(buildingCacheRef.current.values());
+    const visibleCafes = cafesRef.current.filter((c) => !visibleIds || visibleIds.has(c.id));
+    const mapBounds = map.getBounds();
+    const vp = mapBounds ? {
+      south: mapBounds.getSouth() - 0.005,
+      north: mapBounds.getNorth() + 0.005,
+      west:  mapBounds.getWest()  - 0.005,
+      east:  mapBounds.getEast()  + 0.005,
+    } : null;
 
-    // Compute shadows for ALL cafes and cache; only include visible ones in features
-    const features: object[] = [];
-    for (const cafe of cafesRef.current) {
+    const features = visibleCafes.map((cafe) => {
+      const hasKnownSunStatus = Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id);
+      const inViewport = !vp || (
+        cafe.lat >= vp.south && cafe.lat <= vp.north &&
+        cafe.lng >= vp.west  && cafe.lng <= vp.east
+      );
+
       let chkLat = cafe.lat, chkLng = cafe.lng;
       if (sunPos.altitudeDeg > 0) {
         const dlat = (OFFSET_M * Math.cos(azRad)) / 111_000;
@@ -349,12 +367,19 @@ export function MapView({
       }
 
       let inShadow: boolean;
-      if (sunPos.altitudeDeg <= 0) {
+      if (hasKnownSunStatus && !recomputeSunData) {
+        inShadow = sunRemainingRef.current[cafe.id] === null;
+      } else if (!inViewport || sunPos.altitudeDeg <= 0) {
         inShadow = true;
       } else {
+        const LAT_MAX = 200 / 111_000;
+        const LNG_MAX = 200 / (111_000 * Math.cos((cafe.lat * Math.PI) / 180));
         const nearby = buildingGridRef.current
           ? buildingGridRef.current.getNearby(cafe.lat, cafe.lng)
-          : Array.from(buildingCacheRef.current.values());
+          : allBuildings.filter((b) => {
+              const [bLat, bLng] = b.polygon[0];
+              return Math.abs(bLat - cafe.lat) < LAT_MAX && Math.abs(bLng - cafe.lng) < LNG_MAX;
+            });
         inShadow = nearby.some((b) => {
           const poly = calcShadowPolygon(b.polygon, b.height ?? FALLBACK_HEIGHT, sunPos.altitudeDeg, sunPos.azimuthDeg);
           return poly.length >= 3 && pointInPolygon(chkLat, chkLng, poly);
@@ -363,15 +388,12 @@ export function MapView({
 
       shadowCacheRef.current.set(cafe.id, inShadow);
 
-      // Only add to map features if this cafe is visible
-      if (!visibleIds || visibleIds.has(cafe.id)) {
-        features.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-          properties: { id: cafe.id, name: cafe.name, inShadow, isSelected: cafe.id === selId },
-        });
-      }
-    }
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+        properties: { id: cafe.id, name: cafe.name, inShadow, isSelected: cafe.id === selId },
+      };
+    });
 
     source.setData({ type: "FeatureCollection", features });
 
@@ -382,7 +404,22 @@ export function MapView({
     // keeping map gestures smooth. Generation counter cancels stale runs.
     const currentDate = new Date(`${ts.date}T${ts.time}:00`);
     const dayDate     = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
-    const allCafes    = [...cafesRef.current];
+    const chunkBounds = map.getBounds();
+    const chunkVp = chunkBounds ? {
+      south: chunkBounds.getSouth() - 0.02,
+      north: chunkBounds.getNorth() + 0.02,
+      west:  chunkBounds.getWest()  - 0.02,
+      east:  chunkBounds.getEast()  + 0.02,
+    } : null;
+    const visible = visibleCafes.filter((c) => !chunkVp || (
+      c.lat >= chunkVp.south && c.lat <= chunkVp.north &&
+      c.lng >= chunkVp.west  && c.lng <= chunkVp.east
+    ));
+    const offscreen = visibleCafes.filter((c) => chunkVp && !(
+      c.lat >= chunkVp.south && c.lat <= chunkVp.north &&
+      c.lng >= chunkVp.west  && c.lng <= chunkVp.east
+    ));
+    const allCafes    = [...visible, ...offscreen];
     const remaining: Record<string, number | null> = {};
     const timelines: SunTimelineData = {};
     const CHUNK = 15;
@@ -423,17 +460,15 @@ export function MapView({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (source as any).setData({
             type: "FeatureCollection",
-            features: allCafes
-              .filter((cafe) => !visibleIds || visibleIds.has(cafe.id))
-              .map((cafe) => ({
-                type: "Feature",
-                geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-                properties: {
-                  id: cafe.id, name: cafe.name,
-                  inShadow: remaining[cafe.id] === null,
-                  isSelected: cafe.id === selId,
-                },
-              })),
+            features: visibleCafes.map((cafe) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+              properties: {
+                id: cafe.id, name: cafe.name,
+                inShadow: remaining[cafe.id] === null,
+                isSelected: cafe.id === selId,
+              },
+            })),
           });
         }
       }
@@ -821,7 +856,7 @@ export function MapView({
   // ── visibility filter changed (restaurant toggle) — fast path, no recompute ──
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
-    updateCafesSource(false);
+    updateCafesSource(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCafeIds]);
 
