@@ -233,6 +233,25 @@ function renderShadowCanvas(
 }
 
 // Flip [lat, lng] polygon to GeoJSON [lng, lat] and close the ring
+// Expand a polygon outward from its centroid by bufferM metres (visual only).
+// Closes tiny OSM gaps between adjacent building footprints.
+function expandPolygon(polygon: [number, number][], bufferM: number): [number, number][] {
+  if (polygon.length < 3) return polygon;
+  let clat = 0, clng = 0;
+  for (const [lat, lng] of polygon) { clat += lat; clng += lng; }
+  clat /= polygon.length; clng /= polygon.length;
+  const bufLat = bufferM / 111_000;
+  const bufLng = bufferM / 74_000;
+  const buf = Math.sqrt(bufLat * bufLat + bufLng * bufLng);
+  return polygon.map(([lat, lng]) => {
+    const dlat = lat - clat;
+    const dlng = lng - clng;
+    const dist = Math.sqrt(dlat * dlat + dlng * dlng) || 1e-10;
+    const scale = (dist + buf) / dist;
+    return [clat + dlat * scale, clng + dlng * scale] as [number, number];
+  });
+}
+
 // Approximate polygon area in m² using shoelace formula (equirectangular)
 function polygonAreaM2(polygon: [number, number][]): number {
   let area = 0;
@@ -474,7 +493,7 @@ export function MapView({
               .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
               .map((b) => ({
                 type: "Feature",
-                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
+                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(expandPolygon(b.polygon as [number,number][], 2))] },
                 properties: { id: b.id },
               })),
           });
@@ -667,6 +686,13 @@ export function MapView({
           type: "fill",
           source: "buildings-source",
           paint: { "fill-color": "#f0ebe3", "fill-opacity": 1.0 },
+        }, before);
+
+        map.addLayer({
+          id: "buildings-outline",
+          type: "line",
+          source: "buildings-source",
+          paint: { "line-color": "#c9beaf", "line-width": 0.7 },
         }, before);
 
 
@@ -920,7 +946,7 @@ function Legend() {
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #ddd6cc" }} />
+        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #c9beaf" }} />
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Gebäude</span>
       </div>
       <div className="flex items-center gap-2">
