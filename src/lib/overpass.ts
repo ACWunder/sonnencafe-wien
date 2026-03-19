@@ -45,6 +45,12 @@ export function buildOverpassQuery(): string {
   way["amenity"~"restaurant|bar"]["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch|teahouse|pastry|cake|breakfast",i](${bbox});
   node["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|teahouse|pastry|cake|breakfast",i](${bbox});
   way["cuisine"~"coffee_shop|espresso|cappuccino|kaffeehaus|teahouse|pastry|cake|breakfast",i](${bbox});
+  node["amenity"="restaurant"](${bbox});
+  way["amenity"="restaurant"](${bbox});
+  node["amenity"="bar"](${bbox});
+  way["amenity"="bar"](${bbox});
+  node["amenity"="pub"](${bbox});
+  way["amenity"="pub"](${bbox});
 );
 out body;
 >;
@@ -80,7 +86,13 @@ function isCafeElement(tags: Record<string, string>): boolean {
     /restaurant|bar/i.test(tags.amenity ?? "") &&
     /coffee_shop|espresso|cappuccino|kaffeehaus|cafe|brunch|teahouse|pastry|cake|breakfast/i.test(tags.cuisine ?? "")
   ) return true;
+  if (["restaurant", "bar", "pub"].includes(tags.amenity ?? "")) return true;
   return false;
+}
+
+export function isRestaurantType(tags?: Record<string, string>): boolean {
+  if (!tags) return false;
+  return ["restaurant", "bar", "pub"].includes(tags.amenity ?? "");
 }
 
 // For a Way polygon, find the midpoint of the edge that is farthest from the

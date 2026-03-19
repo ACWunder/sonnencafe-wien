@@ -8,6 +8,41 @@ import { getSunPosition, getSunTimes } from "@/lib/sun";
 import { calcShadowPolygon } from "@/lib/buildingShadow";
 import type { BuildingFeature } from "@/app/api/buildings/route";
 
+// ─── spatial grid index ───────────────────────────────────────────────────────
+// Buckets buildings into ~440m cells so nearby lookups are O(1) instead of O(n).
+
+const GRID_CELL = 0.004; // ~0.004° ≈ 440m per cell; shadow radius is ~200m
+
+class BuildingGrid {
+  private cells = new Map<string, BuildingFeature[]>();
+
+  constructor(buildings: BuildingFeature[]) {
+    for (const b of buildings) {
+      const key = BuildingGrid.key(b.polygon[0][0], b.polygon[0][1]);
+      let cell = this.cells.get(key);
+      if (!cell) { cell = []; this.cells.set(key, cell); }
+      cell.push(b);
+    }
+  }
+
+  private static key(lat: number, lng: number): string {
+    return `${Math.floor(lat / GRID_CELL)},${Math.floor(lng / GRID_CELL)}`;
+  }
+
+  getNearby(lat: number, lng: number): BuildingFeature[] {
+    const result: BuildingFeature[] = [];
+    const row = Math.floor(lat / GRID_CELL);
+    const col = Math.floor(lng / GRID_CELL);
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const bs = this.cells.get(`${row + dr},${col + dc}`);
+        if (bs) result.push(...bs);
+      }
+    }
+    return result;
+  }
+}
+
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const DISTRICT_BOUNDS = {
@@ -235,7 +270,10 @@ export function MapView({
 
   const shadowCanvasRef   = useRef<HTMLCanvasElement | null>(null);
   const buildingCacheRef  = useRef<Map<number, BuildingFeature>>(new Map());
+  const buildingGridRef   = useRef<BuildingGrid | null>(null);
+  const shadowWorkerRef   = useRef<Worker | null>(null);
   const sunGenRef         = useRef(0);
+  const selectFromMapRef  = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const locationMarkerRef = useRef<any>(null);
 
@@ -292,8 +330,6 @@ export function MapView({
     const OFFSET_M = 10;
     const azRad  = (sunPos.azimuthDeg * Math.PI) / 180;
 
-    const allBuildings = Array.from(buildingCacheRef.current.values());
-
     const features = cafesRef.current.map((cafe) => {
       let chkLat = cafe.lat, chkLng = cafe.lng;
       if (sunPos.altitudeDeg > 0) {
@@ -307,12 +343,9 @@ export function MapView({
       if (sunPos.altitudeDeg <= 0) {
         inShadow = true;
       } else {
-        const LAT_MAX = 200 / 111_000;
-        const LNG_MAX = 200 / (111_000 * Math.cos((cafe.lat * Math.PI) / 180));
-        const nearby = allBuildings.filter((b) => {
-          const [bLat, bLng] = b.polygon[0];
-          return Math.abs(bLat - cafe.lat) < LAT_MAX && Math.abs(bLng - cafe.lng) < LNG_MAX;
-        });
+        const nearby = buildingGridRef.current
+          ? buildingGridRef.current.getNearby(cafe.lat, cafe.lng)
+          : Array.from(buildingCacheRef.current.values());
         inShadow = nearby.some((b) => {
           const poly = calcShadowPolygon(b.polygon, b.height ?? FALLBACK_HEIGHT, sunPos.altitudeDeg, sunPos.azimuthDeg);
           return poly.length >= 3 && pointInPolygon(chkLat, chkLng, poly);
@@ -335,7 +368,6 @@ export function MapView({
     // Heavy computation: sun-remaining + day timeline for all cafés.
     // Uses requestIdleCallback so chunks only run when the browser is idle,
     // keeping map gestures smooth. Generation counter cancels stale runs.
-    const buildings   = Array.from(buildingCacheRef.current.values());
     const currentDate = new Date(`${ts.date}T${ts.time}:00`);
     const dayDate     = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
     const allCafes    = [...cafesRef.current];
@@ -355,8 +387,10 @@ export function MapView({
       const end = Math.min(idx + CHUNK, allCafes.length);
       for (; idx < end; idx++) {
         const cafe = allCafes[idx];
-        remaining[cafe.id] = calcSunRemaining(cafe, currentDate, buildings);
-        timelines[cafe.id] = calcDayTimeline(cafe, dayDate, buildings);
+        const nearbyForCafe = buildingGridRef.current?.getNearby(cafe.lat, cafe.lng)
+          ?? Array.from(buildingCacheRef.current.values());
+        remaining[cafe.id] = calcSunRemaining(cafe, currentDate, nearbyForCafe);
+        timelines[cafe.id] = calcDayTimeline(cafe, dayDate, nearbyForCafe);
       }
       if (idx < allCafes.length) {
         schedule(processChunk);
@@ -391,6 +425,20 @@ export function MapView({
     const canvas = shadowCanvasRef.current;
     const map    = mapInstanceRef.current;
     if (!canvas || !map || !mapReadyRef.current) return;
+
+    if (shadowWorkerRef.current) {
+      // Offload to worker — result arrives via worker.onmessage
+      shadowWorkerRef.current.postMessage({
+        type: "render",
+        timeState: ts,
+        bounds: DISTRICT_BOUNDS,
+        width: canvas.width,
+        height: canvas.height,
+      });
+      return;
+    }
+
+    // Fallback: render synchronously on main thread
     renderShadowCanvas(canvas, allBuildings, ts);
     const source = map.getSource("shadow-source") as any; // eslint-disable-line @typescript-eslint/no-explicit-any
     source?.updateImage({ url: canvas.toDataURL("image/png"), coordinates: SHADOW_COORDS });
@@ -407,6 +455,8 @@ export function MapView({
       .then((r) => r.json())
       .then(({ buildings }: { buildings: BuildingFeature[] }) => {
         buildings.forEach((b) => buildingCacheRef.current.set(b.id, b));
+        buildingGridRef.current = new BuildingGrid(buildings);
+        shadowWorkerRef.current?.postMessage({ type: "init", buildings });
 
         const map = mapInstanceRef.current;
         if (!map || !mapReadyRef.current) return;
@@ -457,6 +507,30 @@ export function MapView({
     if (!mapRef.current || mapInstanceRef.current) return;
 
     let mounted = true;
+
+    // Create shadow worker
+    const worker = typeof window !== "undefined"
+      ? new Worker(new URL("../workers/shadow.worker.ts", import.meta.url))
+      : null;
+    shadowWorkerRef.current = worker;
+
+    if (worker) {
+      worker.onmessage = (e: MessageEvent) => {
+        if (e.data.type !== "rendered") return;
+        const bitmap: ImageBitmap = e.data.bitmap;
+        const canvas = shadowCanvasRef.current;
+        const map = mapInstanceRef.current;
+        if (!canvas || !map || !mapReadyRef.current) { bitmap.close(); return; }
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { bitmap.close(); return; }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const source = map.getSource("shadow-source") as any;
+        source?.updateImage({ url: canvas.toDataURL("image/png"), coordinates: SHADOW_COORDS });
+      };
+    }
 
     import("maplibre-gl").then((maplibregl) => {
       if (!mounted || !mapRef.current || mapInstanceRef.current) return;
@@ -655,6 +729,7 @@ export function MapView({
           const cafe = cafesRef.current.find((c) => c.id === id);
           if (cafe) {
             e.originalEvent.stopPropagation();
+            selectFromMapRef.current = true;
             onCafeSelectRef.current(cafe);
           }
         });
@@ -684,6 +759,8 @@ export function MapView({
     return () => {
       mounted = false;
       mapReadyRef.current = false;
+      shadowWorkerRef.current?.terminate();
+      shadowWorkerRef.current = null;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -720,12 +797,16 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCafe]);
 
-  // ── pan to selected café ──────────────────────────────────────────────────
+  // ── pan/zoom to selected café ─────────────────────────────────────────────
+  // List selection zooms to 17; map click keeps current zoom.
   useEffect(() => {
     if (!selectedCafe || !mapInstanceRef.current) return;
+    const fromMap = selectFromMapRef.current;
+    selectFromMapRef.current = false;
     mapInstanceRef.current.easeTo({
       center: [selectedCafe.lng, selectedCafe.lat],
-      duration: 400,
+      zoom: fromMap ? mapInstanceRef.current.getZoom() : 17,
+      duration: 500,
     });
   }, [selectedCafe]);
 

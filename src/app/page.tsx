@@ -7,6 +7,7 @@ import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } f
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
 import { MapView } from "@/components/MapView";
 import { InstallBanner } from "@/components/InstallBanner";
+import { isRestaurantType } from "@/lib/overpass";
 
 // ─── Opening hours parser (OSM format) ───────────────────────────────────────
 
@@ -164,6 +165,9 @@ export default function Home() {
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
 
+  // ── Type filter ───────────────────────────────────────────────────────────────
+  const [includeRestaurants, setIncludeRestaurants] = useState(false);
+
   // ── District filter ──────────────────────────────────────────────────────────
   const [showFilter, setShowFilter] = useState(false);
 
@@ -183,9 +187,11 @@ export default function Home() {
   }, [cafes]);
 
   const districtFilteredCafes = useMemo(() => {
-    if (!filterDistricts) return cafes;
-    return cafes.filter((c) => filterDistricts.has(c.district ?? "Wien"));
-  }, [cafes, filterDistricts]);
+    let result = cafes;
+    if (!includeRestaurants) result = result.filter((c) => !isRestaurantType(c.tags));
+    if (filterDistricts) result = result.filter((c) => filterDistricts.has(c.district ?? "Wien"));
+    return result;
+  }, [cafes, filterDistricts, includeRestaurants]);
 
   const toggleDistrict = useCallback((d: string) => {
     const computeNext = (prev: Set<string> | null) => {
@@ -709,6 +715,32 @@ export default function Home() {
                       </label>
                     );
                   })}
+                </div>
+                {/* Restaurant / bar toggle */}
+                <div className="border-t border-zinc-100 pt-1 pb-2">
+                  <div className="flex items-center justify-between pl-3.5 pr-3.5 pt-2 pb-1">
+                    <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Typ</span>
+                  </div>
+                  <label
+                    onClick={() => setIncludeRestaurants((v) => !v)}
+                    className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+                  >
+                    <span className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 transition-all duration-150 ${
+                      includeRestaurants ? "bg-amber-400 border-amber-400" : "bg-white border-zinc-200"
+                    }`}>
+                      <svg
+                        width="9" height="7" viewBox="0 0 9 7" fill="none"
+                        style={{
+                          opacity: includeRestaurants ? 1 : 0,
+                          transform: includeRestaurants ? "scale(1)" : "scale(0.5)",
+                          transition: "opacity 0.15s ease, transform 0.15s ease",
+                        }}
+                      >
+                        <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                    <span className="text-[13px] font-body text-zinc-700">Restaurants & Bars</span>
+                  </label>
                 </div>
             </div>
           )}
