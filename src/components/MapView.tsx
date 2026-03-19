@@ -80,6 +80,7 @@ interface MapViewProps {
   onCafeSelect: (cafe: Cafe | null) => void;
   onSunRemaining: (data: Record<string, number | null>) => void;
   onSunTimeline: (data: SunTimelineData) => void;
+  onSunDataSettled?: () => void;
   // Optional: subset of cafe IDs to show markers for (undefined = show all)
   visibleCafeIds?: Set<string>;
 }
@@ -266,7 +267,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, visibleCafeIds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, visibleCafeIds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -298,6 +299,8 @@ export function MapView({
   onSunRemainingRef.current = onSunRemaining;
   const onSunTimelineRef  = useRef(onSunTimeline);
   onSunTimelineRef.current = onSunTimeline;
+  const onSunDataSettledRef = useRef(onSunDataSettled);
+  onSunDataSettledRef.current = onSunDataSettled;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
@@ -440,6 +443,7 @@ export function MapView({
             })),
           });
         }
+        onSunDataSettledRef.current?.();
       }
     }
     schedule(processChunk);

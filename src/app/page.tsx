@@ -209,6 +209,7 @@ export default function Home() {
     const now = new Date();
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
+  const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(false);
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
@@ -397,6 +398,7 @@ export default function Home() {
     if (sunriseTime === null || sunsetTime === null) return;
     const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
     const nextTime = minuteToTime(nextMinute);
+    setIsCafeSymbolsUpdating(true);
     setSelectedTime(nextMinute);
     setTimeState((prev) => (
       prev.time === nextTime ? prev : { ...prev, time: nextTime }
@@ -452,7 +454,10 @@ export default function Home() {
         <input
           type="date"
           value={timeState.date}
-          onChange={(e) => setTimeState((s) => ({ ...s, date: e.target.value }))}
+          onChange={(e) => {
+            setIsCafeSymbolsUpdating(true);
+            setTimeState((s) => ({ ...s, date: e.target.value }));
+          }}
           className="text-[11px] font-body text-zinc-600 border border-zinc-200 rounded-[8px] px-2 py-1 bg-zinc-50/80 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all cursor-pointer min-w-0 shrink"
         />
 
@@ -460,7 +465,10 @@ export default function Home() {
         <input
           type="time"
           value={timeState.time}
-          onChange={(e) => setTimeState((s) => ({ ...s, time: e.target.value }))}
+          onChange={(e) => {
+            setIsCafeSymbolsUpdating(true);
+            setTimeState((s) => ({ ...s, time: e.target.value }));
+          }}
           className="text-[11px] font-body text-zinc-600 border border-zinc-200 rounded-[8px] px-2 py-1 bg-zinc-50/80 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all cursor-pointer min-w-0 shrink"
         />
 
@@ -468,6 +476,7 @@ export default function Home() {
         <button
           onClick={() => {
             const now = new Date();
+            setIsCafeSymbolsUpdating(true);
             setTimeState({ date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") });
           }}
           className="flex items-center gap-1 bg-gradient-to-br from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-body font-semibold rounded-[8px] transition-all shadow-sm shadow-amber-200/60 active:scale-95 shrink-0 px-2 py-1"
@@ -769,7 +778,16 @@ export default function Home() {
             onCafeSelect={setSelectedCafe}
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
+            onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
           />
+
+          {isCafeSymbolsUpdating && (
+            <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/78 backdrop-blur-sm shadow-[0_10px_30px_rgba(251,191,36,0.18)]">
+                <div className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-amber-200 border-t-amber-400" />
+              </div>
+            </div>
+          )}
 
           {/* Hamburger — floating, mobile only */}
           <button
