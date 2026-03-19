@@ -208,63 +208,72 @@ function polygonToGeoJSON(polygon: [number, number][]): number[][] {
 // ─── marker images — drawn on canvas (sync, no SVG loading issues) ────────────
 
 function registerMarkerImages(map: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  function mkCanvas(w: number, h: number, fn: (ctx: CanvasRenderingContext2D, cx: number, cy: number) => void): ImageData {
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d")!;
+  function mk(w: number, h: number, fn: (ctx: CanvasRenderingContext2D, cx: number, cy: number) => void): ImageData {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d")!;
     fn(ctx, w / 2, h / 2);
     return ctx.getImageData(0, 0, w, h);
   }
 
-  function drawRays(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
-    ctx.strokeStyle = "#f97316";
-    ctx.lineWidth = 3;
+  // ── Sunny marker: amber filled circle + white sun icon inside ──────────────
+  // 80×80 canvas @2x → displays as 40×40 CSS px at icon-size 1.0
+  function drawSunny(ctx: CanvasRenderingContext2D, cx: number, cy: number, selected: boolean) {
+    // drop shadow
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+
+    // amber filled circle
+    ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2);
+    ctx.fillStyle = "#f59e0b"; ctx.fill();
+
+    ctx.shadowColor = "transparent";
+
+    // white border (thicker when selected)
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = selected ? 5.5 : 3.5;
+    ctx.stroke();
+
+    // white sun icon inside: small circle + 8 rays
+    ctx.strokeStyle = "white";
     ctx.lineCap = "round";
+
+    // rays (from r=10 to r=18, inside the amber circle)
+    ctx.lineWidth = 2.5;
     for (let i = 0; i < 8; i++) {
       const a = (i * 45 * Math.PI) / 180;
       ctx.beginPath();
-      ctx.moveTo(cx + 16 * Math.sin(a), cy - 16 * Math.cos(a));
-      ctx.lineTo(cx + 24 * Math.sin(a), cy - 24 * Math.cos(a));
+      ctx.moveTo(cx + 10 * Math.sin(a), cy - 10 * Math.cos(a));
+      ctx.lineTo(cx + 17 * Math.sin(a), cy - 17 * Math.cos(a));
       ctx.stroke();
     }
+
+    // center dot
+    ctx.beginPath(); ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+    ctx.fillStyle = "white"; ctx.fill();
   }
 
-  function drawSunCore(ctx: CanvasRenderingContext2D, cx: number, cy: number, strokeW: number) {
-    ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-    ctx.fillStyle = "#f97316"; ctx.fill();
-    ctx.strokeStyle = "white"; ctx.lineWidth = strokeW; ctx.stroke();
+  // ── Shade marker: slate filled circle ──────────────────────────────────────
+  // 64×64 canvas @2x → displays as 32×32 CSS px at icon-size 1.0
+  function drawShade(ctx: CanvasRenderingContext2D, cx: number, cy: number, selected: boolean) {
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+
+    ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#475569"; ctx.fill();
+
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = selected ? 5 : 3;
+    ctx.stroke();
   }
 
-  function drawShadeCore(ctx: CanvasRenderingContext2D, cx: number, cy: number, strokeW: number) {
-    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-    ctx.fillStyle = "#475569"; ctx.globalAlpha = 0.88; ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "white"; ctx.lineWidth = strokeW; ctx.stroke();
-  }
-
-  // 56×56 canvas → pixelRatio:2 → displays as 28×28 CSS px
-  map.addImage("cafe-sunny", mkCanvas(56, 56, (ctx, cx, cy) => {
-    ctx.beginPath(); ctx.arc(cx, cy, 19, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(253,186,116,0.28)"; ctx.fill();
-    drawRays(ctx, cx, cy);
-    drawSunCore(ctx, cx, cy, 3.5);
-  }), { pixelRatio: 2 });
-
-  map.addImage("cafe-sunny-sel", mkCanvas(56, 56, (ctx, cx, cy) => {
-    ctx.beginPath(); ctx.arc(cx, cy, 19, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(253,186,116,0.28)"; ctx.fill();
-    drawRays(ctx, cx, cy);
-    drawSunCore(ctx, cx, cy, 5.5);
-  }), { pixelRatio: 2 });
-
-  // 40×40 canvas → pixelRatio:2 → displays as 20×20 CSS px
-  map.addImage("cafe-shade", mkCanvas(40, 40, (ctx, cx, cy) => {
-    drawShadeCore(ctx, cx, cy, 3);
-  }), { pixelRatio: 2 });
-
-  map.addImage("cafe-shade-sel", mkCanvas(40, 40, (ctx, cx, cy) => {
-    drawShadeCore(ctx, cx, cy, 5.5);
-  }), { pixelRatio: 2 });
+  map.addImage("cafe-sunny",     mk(80, 80, (ctx, cx, cy) => drawSunny(ctx, cx, cy, false)), { pixelRatio: 2 });
+  map.addImage("cafe-sunny-sel", mk(80, 80, (ctx, cx, cy) => drawSunny(ctx, cx, cy, true)),  { pixelRatio: 2 });
+  map.addImage("cafe-shade",     mk(64, 64, (ctx, cx, cy) => drawShade(ctx, cx, cy, false)), { pixelRatio: 2 });
+  map.addImage("cafe-shade-sel", mk(64, 64, (ctx, cx, cy) => drawShade(ctx, cx, cy, true)),  { pixelRatio: 2 });
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -629,11 +638,9 @@ export function MapView({
               ["case", ["get", "inShadow"], "cafe-shade",     "cafe-sunny"],
             ],
             "icon-size": [
-              "interpolate", ["linear"], ["zoom"],
-              12, 0.48,
-              14, 0.62,
-              16, 0.78,
-              18, 0.95,
+              "*",
+              ["interpolate", ["linear"], ["zoom"], 12, 0.38, 14, 0.5, 16, 0.62, 18, 0.75],
+              ["case", ["get", "isSelected"], 1.5, 1.0],
             ],
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
@@ -819,20 +826,20 @@ function Legend() {
       <div className="flex items-center gap-2 mb-1.5">
         {/* Sunny marker preview */}
         <svg width="16" height="16" viewBox="0 0 16 16">
-          <g stroke="#f97316" strokeWidth="1" strokeLinecap="round">
-            {[0,45,90,135,180,225,270,315].map((a) => (
-              <line key={a} x1="8" y1="1.5" x2="8" y2="4"
-                transform={`rotate(${a},8,8)`} />
-            ))}
-          </g>
-          <circle cx="8" cy="8" r="3.5" fill="#f97316" stroke="white" strokeWidth="1.2"/>
+          <circle cx="8" cy="8" r="7" fill="#f59e0b" stroke="white" strokeWidth="1.5"/>
+          {[0,45,90,135,180,225,270,315].map((a) => (
+            <line key={a} x1="8" y1="3.5" x2="8" y2="5.5"
+              stroke="white" strokeWidth="1" strokeLinecap="round"
+              transform={`rotate(${a},8,8)`} />
+          ))}
+          <circle cx="8" cy="8" r="2" fill="white"/>
         </svg>
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Sonnig</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
         {/* Shade marker preview */}
         <svg width="16" height="16" viewBox="0 0 16 16">
-          <circle cx="8" cy="8" r="4" fill="#475569" stroke="white" strokeWidth="1.5" opacity="0.85"/>
+          <circle cx="8" cy="8" r="6" fill="#475569" stroke="white" strokeWidth="1.5"/>
         </svg>
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
