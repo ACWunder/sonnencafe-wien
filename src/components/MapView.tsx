@@ -311,7 +311,6 @@ export function MapView({
   visibleCafeIdsRef.current  = visibleCafeIds;
 
   const [fetching,  setFetching]  = useState(false);
-  const [locating,  setLocating]  = useState(false);
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -859,10 +858,8 @@ export function MapView({
         <button
           onClick={() => {
             if (!mapInstanceRef.current) return;
-            setLocating(true);
             navigator.geolocation.getCurrentPosition(
               (pos) => {
-                setLocating(false);
                 import("maplibre-gl").then((maplibregl) => {
                   const map = mapInstanceRef.current;
                   if (!map) return;
@@ -881,7 +878,7 @@ export function MapView({
                   map.easeTo({ center: [lng, lat], duration: 600 });
                 });
               },
-              () => setLocating(false),
+              () => {},
               { enableHighAccuracy: true, timeout: 8000 },
             );
           }}
