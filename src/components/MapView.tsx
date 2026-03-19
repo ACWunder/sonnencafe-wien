@@ -277,6 +277,8 @@ export function MapView({
   const buildingCacheRef  = useRef<Map<number, BuildingFeature>>(new Map());
   const buildingGridRef   = useRef<BuildingGrid | null>(null);
   const shadowWorkerRef   = useRef<Worker | null>(null);
+  const shadowRenderInFlightRef = useRef(false);
+  const pendingShadowTimeRef = useRef<TimeState | null>(null);
   const sunDataTimeoutRef = useRef<number | null>(null);
   const sunGenRef         = useRef(0);
   const selectFromMapRef  = useRef(false);
@@ -320,6 +322,21 @@ export function MapView({
       sunDataTimeoutRef.current = null;
       updateCafesSource(true);
     }, delay);
+  }
+
+  function dispatchShadowRender(ts: TimeState) {
+    const worker = shadowWorkerRef.current;
+    const canvas = shadowCanvasRef.current;
+    if (!worker || !canvas) return;
+
+    shadowRenderInFlightRef.current = true;
+    worker.postMessage({
+      type: "render",
+      timeState: ts,
+      bounds: DISTRICT_BOUNDS,
+      width: canvas.width,
+      height: canvas.height,
+    });
   }
 
   // Push updated café GeoJSON to the map source.
@@ -435,14 +452,14 @@ export function MapView({
     if (!canvas || !map || !mapReadyRef.current) return;
 
     if (shadowWorkerRef.current) {
-      // Offload to worker — result arrives via worker.onmessage
-      shadowWorkerRef.current.postMessage({
-        type: "render",
-        timeState: ts,
-        bounds: DISTRICT_BOUNDS,
-        width: canvas.width,
-        height: canvas.height,
-      });
+      // Keep at most one render in flight; if the slider moves again, only the
+      // most recent time is rendered next instead of queueing stale frames.
+      pendingShadowTimeRef.current = ts;
+      if (!shadowRenderInFlightRef.current) {
+        const nextTime = pendingShadowTimeRef.current;
+        pendingShadowTimeRef.current = null;
+        if (nextTime) dispatchShadowRender(nextTime);
+      }
       return;
     }
 
@@ -539,6 +556,13 @@ export function MapView({
         ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
         map.triggerRepaint();
+
+        shadowRenderInFlightRef.current = false;
+        const nextTime = pendingShadowTimeRef.current;
+        pendingShadowTimeRef.current = null;
+        if (nextTime) {
+          dispatchShadowRender(nextTime);
+        }
       };
     }
 
@@ -775,6 +799,8 @@ export function MapView({
     return () => {
       mounted = false;
       mapReadyRef.current = false;
+      shadowRenderInFlightRef.current = false;
+      pendingShadowTimeRef.current = null;
       shadowWorkerRef.current?.terminate();
       shadowWorkerRef.current = null;
       if (mapInstanceRef.current) {
