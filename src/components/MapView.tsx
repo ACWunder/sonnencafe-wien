@@ -549,9 +549,16 @@ export function MapView({
         )?.id;
         const before = firstSymbolId; // undefined is fine — appends to end if no symbols
 
+        // ── hide POI layers ────────────────────────────────────────────────
+        // Hide all shop/restaurant/icon POI layers – keep only road & place labels.
+        map.getStyle().layers.forEach((l: { id: string; type: string; "source-layer"?: string }) => {
+          if (l["source-layer"] === "poi") {
+            map.setLayoutProperty(l.id, "visibility", "none");
+          }
+        });
+
         // ── filter place labels ────────────────────────────────────────────
         // Hide neighbourhood/quarter labels (Grätzl names) – keep suburb/Bezirke.
-        // Guard: only apply if the layer actually exists in this style.
         if (map.getLayer("label_other")) {
           map.setFilter("label_other", [
             "match", ["get", "class"],
