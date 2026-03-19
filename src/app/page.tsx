@@ -486,17 +486,16 @@ export default function Home() {
       )}
 
       {/* ── Mobile slide-in sidebar ── */}
-      {sidebarOpen && (
-        <div className="md:hidden fixed inset-0 z-[9998] flex">
+        <div className={`md:hidden fixed inset-0 z-[9998] flex ${sidebarOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarOpen ? "opacity-100" : "opacity-0"}`}
             onTouchEnd={(e) => { e.preventDefault(); setSidebarOpen(false); }}
             onClick={() => setSidebarOpen(false)}
           />
           {/* Panel */}
           <div
-            className="relative flex flex-col bg-white h-full shadow-2xl"
+            className={`relative flex flex-col bg-white h-full shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
             style={{ width: "min(85vw, 340px)" }}
           >
             {/* Panel header */}
@@ -584,7 +583,6 @@ export default function Home() {
             </ul>
           </div>
         </div>
-      )}
 
       {/* ── Single layout: sidebar (desktop) + map + bottom sheet (mobile) ── */}
       <div className="flex flex-1 overflow-hidden">
