@@ -64,6 +64,7 @@ function isOpenNow(oh: string | undefined, date: Date): boolean | null {
       if (parts.length < 2) continue;
       const [sh, sm] = parts[0].split(":").map(Number);
       const [eh, em] = parts[1].split(":").map(Number);
+      if (isNaN(sh) || isNaN(eh)) continue;
       const start = sh * 60 + (sm || 0);
       const end = eh * 60 + (em || 0);
       if (end > start ? (nowMin >= start && nowMin < end) : (nowMin >= start || nowMin < end)) {
@@ -101,6 +102,7 @@ function getTodayHours(oh: string | undefined, date: Date): string | null {
       if (parts.length < 2) return null;
       const [sh, sm] = parts[0].split(":").map(Number);
       const [eh, em] = parts[1].split(":").map(Number);
+      if (isNaN(sh) || isNaN(eh)) return null;
       return `${fmt(sh, sm || 0)}–${fmt(eh, em || 0)}h`;
     }).filter(Boolean);
 
@@ -900,10 +902,11 @@ function SelectedCafeCard({
             </h2>
             {openStatus !== null && (
               <span
-                className={`text-[8px] font-body font-semibold shrink-0 leading-none ${openStatus ? "" : "text-red-400"}`}
+                className={`text-[8px] font-body font-semibold shrink-0 leading-none flex flex-col items-start ${openStatus ? "" : "text-red-400"}`}
                 style={openStatus ? { color: "#00cd00" } : undefined}
               >
-                {openStatus ? "geöffnet" : "geschlossen"}{todayHours && ` · ${todayHours}`}
+                <span>{openStatus ? "geöffnet" : "geschlossen"}</span>
+                {todayHours && <span>{todayHours}</span>}
               </span>
             )}
           </div>
