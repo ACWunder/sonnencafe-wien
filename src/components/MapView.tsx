@@ -232,77 +232,6 @@ function renderShadowCanvas(
   ctx.fill(); // single fill → union of all polygons, no opacity stacking
 }
 
-// Raster gap fill: rasterise buildings, flood-fill outside, paint enclosed
-// pixels smaller than maxAreaM2 in building colour onto an offscreen canvas.
-function renderGapCanvas(canvas: HTMLCanvasElement, buildings: BuildingFeature[], maxAreaM2 = 200) {
-  const W = canvas.width, H = canvas.height;
-  const dLng = DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west;
-  const dLat = DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south;
-  const cellAreaM2 = (dLng / W * 74_000) * (dLat / H * 111_000);
-  const maxCells = Math.ceil(maxAreaM2 / cellAreaM2);
-
-  const grid = new Uint8Array(W * H);
-  for (const b of buildings) {
-    const poly = b.polygon as [number, number][];
-    let minR = H, maxR = 0;
-    for (const [lat] of poly) {
-      const r = Math.floor((DISTRICT_BOUNDS.north - lat) / dLat * H);
-      if (r < minR) minR = r; if (r > maxR) maxR = r;
-    }
-    for (let row = Math.max(0, minR); row <= Math.min(H - 1, maxR); row++) {
-      const y = DISTRICT_BOUNDS.north - (row + 0.5) / H * dLat;
-      const xs: number[] = [];
-      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-        const [la, lo] = poly[i], [lb, lob] = poly[j];
-        if ((la > y) !== (lb > y))
-          xs.push(Math.floor(((lo + (y - la) / (lb - la) * (lob - lo)) - DISTRICT_BOUNDS.west) / dLng * W));
-      }
-      xs.sort((a, b2) => a - b2);
-      for (let k = 0; k + 1 < xs.length; k += 2)
-        for (let c = Math.max(0, xs[k]); c <= Math.min(W - 1, xs[k + 1]); c++)
-          grid[row * W + c] = 1;
-    }
-  }
-
-  const outside = new Uint8Array(W * H);
-  const stack: number[] = [];
-  const seed = (i: number) => { if (!grid[i] && !outside[i]) { outside[i] = 1; stack.push(i); } };
-  for (let r = 0; r < H; r++) { seed(r * W); seed(r * W + W - 1); }
-  for (let c = 1; c < W - 1; c++) { seed(c); seed((H - 1) * W + c); }
-  while (stack.length) {
-    const i = stack.pop()!;
-    const r = (i / W) | 0, c = i % W;
-    if (r > 0) seed(i - W); if (r < H - 1) seed(i + W);
-    if (c > 0) seed(i - 1); if (c < W - 1) seed(i + 1);
-  }
-
-  const seen = new Uint8Array(W * H);
-  const ctx = canvas.getContext("2d")!;
-  ctx.clearRect(0, 0, W, H);
-  const imgData = ctx.createImageData(W, H);
-  const px = imgData.data;
-
-  for (let start = 0; start < W * H; start++) {
-    if (grid[start] || outside[start] || seen[start]) continue;
-    const comp: number[] = [];
-    const q = [start]; seen[start] = 1;
-    let tooLarge = false;
-    while (q.length) {
-      const i = q.pop()!;
-      if (!tooLarge) comp.push(i);
-      if (comp.length > maxCells) tooLarge = true;
-      const r = (i / W) | 0, c = i % W;
-      if (r > 0)     { const ni = i - W; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
-      if (r < H - 1) { const ni = i + W; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
-      if (c > 0)     { const ni = i - 1; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
-      if (c < W - 1) { const ni = i + 1; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
-    }
-    if (tooLarge) continue;
-    for (const i of comp) { const p = i * 4; px[p] = 240; px[p+1] = 235; px[p+2] = 227; px[p+3] = 255; }
-  }
-  ctx.putImageData(imgData, 0, 0);
-}
-
 // Flip [lat, lng] polygon to GeoJSON [lng, lat] and close the ring
 // Approximate polygon area in m² using shoelace formula (equirectangular)
 function polygonAreaM2(polygon: [number, number][]): number {
@@ -313,7 +242,6 @@ function polygonAreaM2(polygon: [number, number][]): number {
   // At lat ~48.2: 1° lat ≈ 111 000 m, 1° lng ≈ 74 000 m
   return (Math.abs(area) / 2) * 111_000 * 74_000;
 }
-
 
 function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   const ring = polygon.map(([lat, lng]) => [lng, lat]);
@@ -354,7 +282,6 @@ export function MapView({
   const mapReadyRef    = useRef(false);  // true once map 'load' event fired
 
   const shadowCanvasRef   = useRef<HTMLCanvasElement | null>(null);
-  const gapCanvasRef      = useRef<HTMLCanvasElement | null>(null);
   const buildingCacheRef  = useRef<Map<number, BuildingFeature>>(new Map());
   const buildingGridRef   = useRef<BuildingGrid | null>(null);
   const shadowWorkerRef   = useRef<Worker | null>(null);
@@ -553,14 +480,6 @@ export function MapView({
           });
         }
 
-        // Render enclosed gaps onto canvas overlay
-        const gc = gapCanvasRef.current;
-        if (gc) {
-          renderGapCanvas(gc, buildings, 200);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (map.getSource("gap-source") as any)?.updateImage({ url: gc.toDataURL("image/png"), coordinates: SHADOW_COORDS });
-        }
-
         // Build visual shadow layer and compute initial café statuses
         updateShadowSource(buildings, timeStateRef.current);
         updateCafesSource(true);
@@ -665,13 +584,6 @@ export function MapView({
           ]);
         }
 
-        // ── gap canvas ─────────────────────────────────────────────────────
-
-        const gapCanvas = document.createElement("canvas");
-        gapCanvas.width  = SHADOW_W;
-        gapCanvas.height = SHADOW_H;
-        gapCanvasRef.current = gapCanvas;
-
         // ── shadow canvas ──────────────────────────────────────────────────
 
         const shadowCanvas = document.createElement("canvas");
@@ -680,12 +592,6 @@ export function MapView({
         shadowCanvasRef.current = shadowCanvas;
 
         // ── sources ────────────────────────────────────────────────────────
-
-        map.addSource("gap-source", {
-          type: "image",
-          url: gapCanvas.toDataURL("image/png"),
-          coordinates: SHADOW_COORDS,
-        });
 
         map.addSource("green-areas-source", {
           type: "geojson",
@@ -757,17 +663,17 @@ export function MapView({
         }, before);
 
         map.addLayer({
-          id: "gap-fill",
-          type: "raster",
-          source: "gap-source",
-          paint: { "raster-opacity": 1.0, "raster-resampling": "nearest" },
-        }, before);
-
-        map.addLayer({
           id: "buildings-fill",
           type: "fill",
           source: "buildings-source",
           paint: { "fill-color": "#f0ebe3", "fill-opacity": 1.0 },
+        }, before);
+
+        map.addLayer({
+          id: "buildings-outline",
+          type: "line",
+          source: "buildings-source",
+          paint: { "line-color": "#c9beaf", "line-width": 0.7 },
         }, before);
 
         // Shade cafés — reliable circle layer, always visible
@@ -1020,7 +926,7 @@ function Legend() {
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #e0d8cc" }} />
+        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #ddd6cc" }} />
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Gebäude</span>
       </div>
       <div className="flex items-center gap-2">
