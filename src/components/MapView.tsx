@@ -233,25 +233,6 @@ function renderShadowCanvas(
 }
 
 // Flip [lat, lng] polygon to GeoJSON [lng, lat] and close the ring
-// Expand a polygon outward from its centroid by bufferM metres (visual only).
-// Closes tiny OSM gaps between adjacent building footprints.
-function expandPolygon(polygon: [number, number][], bufferM: number): [number, number][] {
-  if (polygon.length < 3) return polygon;
-  let clat = 0, clng = 0;
-  for (const [lat, lng] of polygon) { clat += lat; clng += lng; }
-  clat /= polygon.length; clng /= polygon.length;
-  const bufLat = bufferM / 111_000;
-  const bufLng = bufferM / 74_000;
-  const buf = Math.sqrt(bufLat * bufLat + bufLng * bufLng);
-  return polygon.map(([lat, lng]) => {
-    const dlat = lat - clat;
-    const dlng = lng - clng;
-    const dist = Math.sqrt(dlat * dlat + dlng * dlng) || 1e-10;
-    const scale = (dist + buf) / dist;
-    return [clat + dlat * scale, clng + dlng * scale] as [number, number];
-  });
-}
-
 // Approximate polygon area in m² using shoelace formula (equirectangular)
 function polygonAreaM2(polygon: [number, number][]): number {
   let area = 0;
@@ -260,6 +241,94 @@ function polygonAreaM2(polygon: [number, number][]): number {
   }
   // At lat ~48.2: 1° lat ≈ 111 000 m, 1° lng ≈ 74 000 m
   return (Math.abs(area) / 2) * 111_000 * 74_000;
+}
+
+// Raster-based enclosed gap detection.
+// Rasterises all buildings onto a grid, flood-fills "outside" from the border,
+// then finds small connected non-building regions that were never reached
+// (i.e. fully enclosed by buildings). Returns bounding-box polygons for each.
+function computeGapPolygons(buildings: BuildingFeature[], maxAreaM2 = 50): [number, number][][] {
+  // ~3 m × 3 m cells over the district (1024 wide × 2048 tall)
+  const W = 1024, H = 2048;
+  const dLng = DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west;
+  const dLat = DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south;
+  const cellAreaM2 = (dLng / W * 74_000) * (dLat / H * 111_000);
+  const maxCells = Math.ceil(maxAreaM2 / cellAreaM2);
+
+  // Scanline-rasterise every building polygon
+  const grid = new Uint8Array(W * H);
+  for (const b of buildings) {
+    const poly = b.polygon as [number, number][];
+    let minR = H, maxR = 0;
+    for (const [lat] of poly) {
+      const r = Math.floor((DISTRICT_BOUNDS.north - lat) / dLat * H);
+      if (r < minR) minR = r;
+      if (r > maxR) maxR = r;
+    }
+    for (let row = Math.max(0, minR); row <= Math.min(H - 1, maxR); row++) {
+      const y = DISTRICT_BOUNDS.north - (row + 0.5) / H * dLat;
+      const xs: number[] = [];
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [la, lo] = poly[i], [lb, lob] = poly[j];
+        if ((la > y) !== (lb > y))
+          xs.push(Math.floor(((lo + (y - la) / (lb - la) * (lob - lo)) - DISTRICT_BOUNDS.west) / dLng * W));
+      }
+      xs.sort((a, b2) => a - b2);
+      for (let k = 0; k + 1 < xs.length; k += 2)
+        for (let c = Math.max(0, xs[k]); c <= Math.min(W - 1, xs[k + 1]); c++)
+          grid[row * W + c] = 1;
+    }
+  }
+
+  // Iterative flood-fill from all border cells → marks "outside"
+  const outside = new Uint8Array(W * H);
+  const stack: number[] = [];
+  const seed = (idx: number) => { if (!grid[idx] && !outside[idx]) { outside[idx] = 1; stack.push(idx); } };
+  for (let r = 0; r < H; r++) { seed(r * W); seed(r * W + W - 1); }
+  for (let c = 1; c < W - 1; c++) { seed(c); seed((H - 1) * W + c); }
+  while (stack.length) {
+    const i = stack.pop()!;
+    const r = (i / W) | 0, c = i % W;
+    if (r > 0)     seed(i - W);
+    if (r < H - 1) seed(i + W);
+    if (c > 0)     seed(i - 1);
+    if (c < W - 1) seed(i + 1);
+  }
+
+  // Find connected components of enclosed (non-building, non-outside) cells
+  const seen = new Uint8Array(W * H);
+  const result: [number, number][][] = [];
+  for (let start = 0; start < W * H; start++) {
+    if (grid[start] || outside[start] || seen[start]) continue;
+    const comp: number[] = [];
+    const q = [start];
+    seen[start] = 1;
+    let tooLarge = false;
+    while (q.length) {
+      const i = q.pop()!;
+      if (!tooLarge) comp.push(i);
+      if (comp.length > maxCells) tooLarge = true;
+      const r = (i / W) | 0, c = i % W;
+      if (r > 0)     { const ni = i - W; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
+      if (r < H - 1) { const ni = i + W; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
+      if (c > 0)     { const ni = i - 1; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
+      if (c < W - 1) { const ni = i + 1; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
+    }
+    if (tooLarge) continue;
+    // Emit bounding-box polygon for this gap
+    let minR = H, maxR = 0, minC = W, maxC = 0;
+    for (const i of comp) {
+      const r = (i / W) | 0, cc = i % W;
+      if (r < minR) minR = r; if (r > maxR) maxR = r;
+      if (cc < minC) minC = cc; if (cc > maxC) maxC = cc;
+    }
+    const latN = DISTRICT_BOUNDS.north - minR / H * dLat;
+    const latS = DISTRICT_BOUNDS.north - (maxR + 1) / H * dLat;
+    const lngW = DISTRICT_BOUNDS.west + minC / W * dLng;
+    const lngE = DISTRICT_BOUNDS.west + (maxC + 1) / W * dLng;
+    result.push([[latN, lngW], [latN, lngE], [latS, lngE], [latS, lngW]]);
+  }
+  return result;
 }
 
 function polygonToGeoJSON(polygon: [number, number][]): number[][] {
@@ -489,13 +558,20 @@ export function MapView({
         if (source) {
           source.setData({
             type: "FeatureCollection",
-            features: buildings
-              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
-              .map((b) => ({
+            features: [
+              ...buildings
+                .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+                .map((b) => ({
+                  type: "Feature",
+                  geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
+                  properties: { id: b.id },
+                })),
+              ...computeGapPolygons(buildings, 50).map((poly, i) => ({
                 type: "Feature",
-                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(expandPolygon(b.polygon as [number,number][], 2))] },
-                properties: { id: b.id },
+                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(poly)] },
+                properties: { id: -i - 1 },
               })),
+            ],
           });
         }
 
