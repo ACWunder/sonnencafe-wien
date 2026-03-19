@@ -885,7 +885,8 @@ export function MapView({
               { enableHighAccuracy: true, timeout: 8000 },
             );
           }}
-          className="w-[56px] h-[56px] bg-white rounded-full shadow-xl shadow-zinc-300/40 border border-zinc-100 flex items-center justify-center active:scale-95 transition-all"
+          className="w-[56px] h-[56px] bg-white rounded-full shadow-xl shadow-zinc-300/40 border border-zinc-100 flex items-center justify-center"
+          style={{ marginRight: "20px" }}
           title="Meinen Standort anzeigen"
         >
           {locating ? (
@@ -896,12 +897,10 @@ export function MapView({
             </svg>
           )}
         </button>
-        <div style={{ marginRight: "20px" }}>
-          <SunCompass
-            timeState={timeState}
-            onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
-          />
-        </div>
+        <SunCompass
+          timeState={timeState}
+          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
+        />
       </div>
     </div>
   );

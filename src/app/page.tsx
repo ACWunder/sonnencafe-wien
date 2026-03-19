@@ -678,7 +678,7 @@ export default function Home() {
           {/* Hamburger — floating, mobile only */}
           <button
             onClick={() => { setSidebarOpen(true); setSelectedCafe(null); }}
-            className="md:hidden absolute top-3 left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 active:scale-75 active:bg-zinc-100 transition-all duration-100"
+            className="md:hidden absolute top-3 left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -687,10 +687,10 @@ export default function Home() {
           <button
             ref={filterButtonRef}
             onClick={() => { setShowFilter((v) => !v); setSelectedCafe(null); }}
-            className={`absolute top-20 left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center active:scale-75 transition-all duration-100 ${
+            className={`absolute top-20 left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center ${
               filterActive
-                ? "bg-amber-400 border-amber-300 text-white active:bg-amber-500"
-                : "bg-white/90 border-zinc-100 text-zinc-500 active:bg-zinc-100"
+                ? "bg-amber-400 border-amber-300 text-white"
+                : "bg-white/90 border-zinc-100 text-zinc-500"
             }`}
             title="Bezirke filtern"
           >
