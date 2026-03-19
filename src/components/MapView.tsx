@@ -205,62 +205,66 @@ function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   return ring;
 }
 
-// ─── marker SVGs (2× for retina, loaded once via map.addImage) ───────────────
+// ─── marker images — drawn on canvas (sync, no SVG loading issues) ────────────
 
-const MARKER_SVGS: Record<string, string> = {
-  "cafe-sunny": `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
-    <circle cx="28" cy="28" r="18" fill="#fed7aa" opacity="0.3"/>
-    <g stroke="#f97316" stroke-width="3" stroke-linecap="round">
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(0,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(45,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(90,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(135,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(180,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(225,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(270,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(315,28,28)"/>
-    </g>
-    <circle cx="28" cy="28" r="12" fill="#f97316" stroke="white" stroke-width="3.5"/>
-  </svg>`,
+function registerMarkerImages(map: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  function mkCanvas(w: number, h: number, fn: (ctx: CanvasRenderingContext2D, cx: number, cy: number) => void): ImageData {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+    fn(ctx, w / 2, h / 2);
+    return ctx.getImageData(0, 0, w, h);
+  }
 
-  "cafe-sunny-sel": `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
-    <circle cx="28" cy="28" r="18" fill="#fed7aa" opacity="0.3"/>
-    <g stroke="#f97316" stroke-width="3" stroke-linecap="round">
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(0,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(45,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(90,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(135,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(180,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(225,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(270,28,28)"/>
-      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(315,28,28)"/>
-    </g>
-    <circle cx="28" cy="28" r="12" fill="#f97316" stroke="white" stroke-width="5"/>
-  </svg>`,
+  function drawRays(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 8; i++) {
+      const a = (i * 45 * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.moveTo(cx + 16 * Math.sin(a), cy - 16 * Math.cos(a));
+      ctx.lineTo(cx + 24 * Math.sin(a), cy - 24 * Math.cos(a));
+      ctx.stroke();
+    }
+  }
 
-  "cafe-shade": `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="9" fill="#475569" stroke="white" stroke-width="3" opacity="0.85"/>
-  </svg>`,
+  function drawSunCore(ctx: CanvasRenderingContext2D, cx: number, cy: number, strokeW: number) {
+    ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+    ctx.fillStyle = "#f97316"; ctx.fill();
+    ctx.strokeStyle = "white"; ctx.lineWidth = strokeW; ctx.stroke();
+  }
 
-  "cafe-shade-sel": `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="9" fill="#475569" stroke="white" stroke-width="5" opacity="0.9"/>
-  </svg>`,
-};
+  function drawShadeCore(ctx: CanvasRenderingContext2D, cx: number, cy: number, strokeW: number) {
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+    ctx.fillStyle = "#475569"; ctx.globalAlpha = 0.88; ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "white"; ctx.lineWidth = strokeW; ctx.stroke();
+  }
 
-function loadMarkerImages(map: any): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const entries = Object.entries(MARKER_SVGS);
-  return Promise.all(
-    entries.map(([name, svg]) =>
-      new Promise<void>((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          map.addImage(name, img, { pixelRatio: 2 });
-          resolve();
-        };
-        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-      }),
-    ),
-  ).then(() => undefined);
+  // 56×56 canvas → pixelRatio:2 → displays as 28×28 CSS px
+  map.addImage("cafe-sunny", mkCanvas(56, 56, (ctx, cx, cy) => {
+    ctx.beginPath(); ctx.arc(cx, cy, 19, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(253,186,116,0.28)"; ctx.fill();
+    drawRays(ctx, cx, cy);
+    drawSunCore(ctx, cx, cy, 3.5);
+  }), { pixelRatio: 2 });
+
+  map.addImage("cafe-sunny-sel", mkCanvas(56, 56, (ctx, cx, cy) => {
+    ctx.beginPath(); ctx.arc(cx, cy, 19, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(253,186,116,0.28)"; ctx.fill();
+    drawRays(ctx, cx, cy);
+    drawSunCore(ctx, cx, cy, 5.5);
+  }), { pixelRatio: 2 });
+
+  // 40×40 canvas → pixelRatio:2 → displays as 20×20 CSS px
+  map.addImage("cafe-shade", mkCanvas(40, 40, (ctx, cx, cy) => {
+    drawShadeCore(ctx, cx, cy, 3);
+  }), { pixelRatio: 2 });
+
+  map.addImage("cafe-shade-sel", mkCanvas(40, 40, (ctx, cx, cy) => {
+    drawShadeCore(ctx, cx, cy, 5.5);
+  }), { pixelRatio: 2 });
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -493,13 +497,13 @@ export function MapView({
 
       mapInstanceRef.current = map;
 
-      map.on("load", async () => {
+      map.on("load", () => {
         if (!mounted) return;
         mapReadyRef.current = true;
 
         // Find the first symbol layer in the base style (road/place labels, icons).
         // All our custom layers are inserted before it so labels always render on top.
-        await loadMarkerImages(map);
+        registerMarkerImages(map);
 
         const firstSymbolId = map.getStyle().layers.find(
           (l: { type: string }) => l.type === "symbol"
