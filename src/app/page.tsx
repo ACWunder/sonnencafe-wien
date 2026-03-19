@@ -80,9 +80,10 @@ function isOpenNow(oh: string | undefined, date: Date): boolean | null {
 function getTodayHours(oh: string | undefined, date: Date): string | null {
   if (!oh) return null;
   const s = oh.trim();
-  if (s === "24/7") return "0–24h";
+  if (s === "24/7") return "24/7";
 
   const dow = date.getDay();
+  let result: string | null = null;
 
   for (const rule of s.split(";")) {
     const r = rule.trim();
@@ -92,23 +93,22 @@ function getTodayHours(oh: string | undefined, date: Date): string | null {
     const days = ohExpandDays(m[1]);
     if (!days.includes(dow)) continue;
     const timeSpec = m[2].trim().toLowerCase();
-    if (timeSpec === "off") return null;
-
-    const fmt = (h: number, min: number) =>
-      min ? `${h}:${min.toString().padStart(2, "0")}` : `${h}`;
-
-    const ranges = timeSpec.split(",").map((range) => {
-      const parts = range.trim().split("-");
-      if (parts.length < 2) return null;
-      const [sh, sm] = parts[0].split(":").map(Number);
-      const [eh, em] = parts[1].split(":").map(Number);
-      if (isNaN(sh) || isNaN(eh)) return null;
-      return `${fmt(sh, sm || 0)}–${fmt(eh, em || 0)}h`;
-    }).filter(Boolean);
-
-    if (ranges.length > 0) return ranges.join(", ");
+    if (timeSpec === "off") { result = null; continue; }
+    // Format first time range only: "09:00-18:00" → "9–18h"
+    const range = timeSpec.split(",")[0].trim();
+    const parts = range.split("-");
+    if (parts.length < 2) continue;
+    const fmt = (t: string) => {
+      const [h, m2] = t.trim().split(":").map(Number);
+      if (isNaN(h)) return null;
+      return m2 ? `${h}:${String(m2).padStart(2, "0")}` : `${h}`;
+    };
+    const start = fmt(parts[0]);
+    const end = fmt(parts[1]);
+    if (!start || !end) continue;
+    result = `${start}–${end}h`;
   }
-  return null;
+  return result;
 }
 
 // ─── Fuzzy search ─────────────────────────────────────────────────────────────
@@ -879,37 +879,25 @@ function SelectedCafeCard({
   return (
     <div className={`m-3 rounded-2xl overflow-hidden border border-zinc-100 shadow-xl shadow-zinc-200/40 shrink-0 bg-white relative cafe-card-enter${isClosing ? " cafe-card-leave" : ""}`}>
 
-      {/* iOS-style close button — absolute top-right corner */}
-      <button
-        onClick={handleClose}
-        className="absolute top-1 right-1 z-10 w-[52px] h-[52px] flex items-center justify-center active:scale-90 transition-transform duration-100"
-      >
-        <span className="w-[32px] h-[32px] rounded-full bg-zinc-900/[0.07] flex items-center justify-center">
-          <X className="w-[15px] h-[15px] text-zinc-500" strokeWidth={2.5} />
-        </span>
-      </button>
-
-      {/* Card header */}
-      <div className={`px-4 pt-4 pb-3.5 pr-14 ${
+      {/* Card header — close button is a flex sibling so content is naturally bounded */}
+      <div className={`flex items-start pl-4 pr-2 pt-4 pb-3.5 ${
         isSunny
           ? "bg-gradient-to-b from-amber-100 via-amber-50 to-white"
           : "bg-gradient-to-b from-zinc-200 via-zinc-100 to-white"
       }`}>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="font-display font-bold text-zinc-900 text-[15px] leading-tight min-w-0">
-              {cafe.name}
-            </h2>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-display font-bold text-zinc-900 text-[15px] leading-tight">
+            {cafe.name}
             {openStatus !== null && (
               <span
-                className={`shrink-0 flex flex-wrap items-baseline gap-x-1 text-[8px] font-body font-semibold leading-snug max-w-[5rem] ${openStatus ? "" : "text-red-400"}`}
-                style={openStatus ? { color: "#00cd00" } : undefined}
+                className={`whitespace-nowrap font-body font-semibold leading-none ${openStatus ? "" : "text-red-400"}`}
+                style={{ fontSize: "8px", verticalAlign: "middle", marginLeft: "6px", ...(openStatus ? { color: "#00cd00" } : {}) }}
               >
-                <span className="whitespace-nowrap">{openStatus ? "geöffnet" : "geschlossen"}</span>
-                {todayHours && <span className="whitespace-nowrap">{todayHours}</span>}
+                {openStatus ? "geöffnet" : "geschlossen"}
+                {todayHours && <span className="font-normal opacity-80"> · {todayHours}</span>}
               </span>
             )}
-          </div>
+          </h2>
           {(cafe.address || cafe.district) && (
             <div className="flex items-center gap-1 mt-1">
               <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -918,17 +906,27 @@ function SelectedCafeCard({
               </p>
             </div>
           )}
+
+          {/* Sun pill */}
+          <div className={`inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full font-body font-medium whitespace-nowrap max-w-full overflow-hidden text-[10.5px] ${
+            isSunny
+              ? "bg-orange-100/80 text-orange-600"
+              : "bg-zinc-100 text-zinc-500"
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSunny ? "bg-orange-400 sun-pulse" : "bg-zinc-400"}`} />
+            <span className="truncate">{sunLabel}</span>
+          </div>
         </div>
 
-        {/* Sun pill */}
-        <div className={`inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full font-body font-medium whitespace-nowrap max-w-full overflow-hidden text-[10.5px] ${
-          isSunny
-            ? "bg-orange-100/80 text-orange-600"
-            : "bg-zinc-100 text-zinc-500"
-        }`}>
-          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSunny ? "bg-orange-400 sun-pulse" : "bg-zinc-400"}`} />
-          <span className="truncate">{sunLabel}</span>
-        </div>
+        {/* Close button — flex sibling, text area never overlaps */}
+        <button
+          onClick={handleClose}
+          className="shrink-0 w-[44px] h-[44px] flex items-start justify-center pt-1 active:scale-90 transition-transform duration-100"
+        >
+          <span className="w-[28px] h-[28px] rounded-full bg-zinc-900/[0.07] flex items-center justify-center">
+            <X className="w-[14px] h-[14px] text-zinc-500" strokeWidth={2.5} />
+          </span>
+        </button>
       </div>
 
       {/* Sun timeline */}
