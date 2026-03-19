@@ -896,16 +896,17 @@ function SelectedCafeCard({
           : "bg-gradient-to-b from-zinc-200 via-zinc-100 to-white"
       }`}>
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <h2 className="font-display font-bold text-zinc-900 text-[15px] leading-tight">
+          <div className="flex items-center gap-2">
+            <h2 className="font-display font-bold text-zinc-900 text-[15px] leading-tight min-w-0">
               {cafe.name}
             </h2>
             {openStatus !== null && (
               <span
-                className={`text-[8px] font-body font-semibold leading-none whitespace-nowrap ${openStatus ? "" : "text-red-400"}`}
+                className={`shrink-0 flex flex-wrap items-baseline gap-x-1 text-[8px] font-body font-semibold leading-snug max-w-[5rem] ${openStatus ? "" : "text-red-400"}`}
                 style={openStatus ? { color: "#00cd00" } : undefined}
               >
-                {openStatus ? "geöffnet" : "geschlossen"}{todayHours && ` · ${todayHours}`}
+                <span className="whitespace-nowrap">{openStatus ? "geöffnet" : "geschlossen"}</span>
+                {todayHours && <span className="whitespace-nowrap">{todayHours}</span>}
               </span>
             )}
           </div>
