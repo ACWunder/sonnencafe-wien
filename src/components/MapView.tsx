@@ -849,8 +849,17 @@ export function MapView({
         </div>
       )}
 
-      {/* Locate button bottom-right */}
-      <div className="absolute z-[500]" style={{ bottom: "24px", right: "16px" }}>
+      {/* Sunrise/sunset — top right */}
+      <div className="absolute z-[500]" style={{ top: "12px", right: "12px" }}>
+        <SunInfoOverlay timeState={timeState} />
+      </div>
+
+      {/* Compass + locate button stacked — bottom right */}
+      <div className="absolute z-[500] flex flex-col gap-3 items-center" style={{ bottom: "24px", right: "16px" }}>
+        <SunCompass
+          timeState={timeState}
+          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
+        />
         <button
           onClick={() => {
             if (!mapInstanceRef.current) return;
@@ -891,15 +900,6 @@ export function MapView({
             </svg>
           )}
         </button>
-      </div>
-
-      {/* Sunrise/sunset + compass stacked top-right */}
-      <div className="absolute z-[500] flex flex-col gap-2 items-end" style={{ top: "12px", right: "12px" }}>
-        <SunInfoOverlay timeState={timeState} />
-        <SunCompass
-          timeState={timeState}
-          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
-        />
       </div>
     </div>
   );

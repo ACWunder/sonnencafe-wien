@@ -677,10 +677,10 @@ export default function Home() {
             onSunTimeline={handleSunTimeline}
           />
 
-          {/* Hamburger — floating below app icon, mobile only */}
+          {/* Hamburger — floating, mobile only */}
           <button
             onClick={() => { setSidebarOpen(true); setSelectedCafe(null); }}
-            className="md:hidden absolute top-3 left-3 z-[500] w-11 h-11 bg-white/90 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 active:scale-75 active:bg-zinc-100 transition-all duration-100"
+            className="md:hidden absolute top-3 left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 active:scale-75 active:bg-zinc-100 transition-all duration-100"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -689,7 +689,7 @@ export default function Home() {
           <button
             ref={filterButtonRef}
             onClick={() => { setShowFilter((v) => !v); setSelectedCafe(null); }}
-            className={`absolute top-[3.25rem] left-3 z-[500] w-11 h-11 backdrop-blur-xl rounded-2xl border shadow-lg shadow-zinc-200/40 flex items-center justify-center active:scale-75 transition-all duration-100 ${
+            className={`absolute top-20 left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center active:scale-75 transition-all duration-100 ${
               filterActive
                 ? "bg-amber-400 border-amber-300 text-white active:bg-amber-500"
                 : "bg-white/90 border-zinc-100 text-zinc-500 active:bg-zinc-100"
@@ -701,7 +701,7 @@ export default function Home() {
 
           {/* Filter panel */}
           {showFilter && (
-            <div ref={filterPanelRef} className="absolute top-[6.5rem] left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden">
+            <div ref={filterPanelRef} className="absolute top-36 left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden">
                 <div className="flex items-center justify-between pl-3.5 pr-3.5 pt-2.5 pb-2">
                   <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Bezirke</span>
                   <button
