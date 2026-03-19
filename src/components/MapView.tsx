@@ -855,7 +855,7 @@ export function MapView({
       </div>
 
       {/* Compass + locate button stacked — bottom right */}
-      <div className="absolute z-[500] flex flex-col gap-3 items-center" style={{ bottom: "24px", right: "16px" }}>
+      <div className="absolute z-[500] flex flex-col gap-3 items-end" style={{ bottom: "24px", right: "16px" }}>
         <button
           onClick={() => {
             if (!mapInstanceRef.current) return;
