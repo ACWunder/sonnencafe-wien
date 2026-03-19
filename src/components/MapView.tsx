@@ -233,6 +233,16 @@ function renderShadowCanvas(
 }
 
 // Flip [lat, lng] polygon to GeoJSON [lng, lat] and close the ring
+// Approximate polygon area in m² using shoelace formula (equirectangular)
+function polygonAreaM2(polygon: [number, number][]): number {
+  let area = 0;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    area += (polygon[j][1] + polygon[i][1]) * (polygon[j][0] - polygon[i][0]);
+  }
+  // At lat ~48.2: 1° lat ≈ 111 000 m, 1° lng ≈ 74 000 m
+  return (Math.abs(area) / 2) * 111_000 * 74_000;
+}
+
 function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   const ring = polygon.map(([lat, lng]) => [lng, lat]);
   if (ring.length > 0 &&
@@ -452,16 +462,21 @@ export function MapView({
         const map = mapInstanceRef.current;
         if (!map || !mapReadyRef.current) return;
 
-        // Push building polygons to the GeoJSON source
+        // Push building polygons to the GeoJSON source.
+        // Filter out tiny footprints (< 80 m²) so small courtyards / sheds
+        // don't appear as gaps inside building blocks.
+        // Shadow computation still uses the full buildingCacheRef.
         const source = map.getSource("buildings-source");
         if (source) {
           source.setData({
             type: "FeatureCollection",
-            features: buildings.map((b) => ({
-              type: "Feature",
-              geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
-              properties: { id: b.id },
-            })),
+            features: buildings
+              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+              .map((b) => ({
+                type: "Feature",
+                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
+                properties: { id: b.id },
+              })),
           });
         }
 
@@ -654,12 +669,6 @@ export function MapView({
           paint: { "fill-color": "#f0ebe3", "fill-opacity": 1.0 },
         }, before);
 
-        map.addLayer({
-          id: "buildings-outline",
-          type: "line",
-          source: "buildings-source",
-          paint: { "line-color": "#c9beaf", "line-width": 0.8 },
-        }, before);
 
         // Shade cafés — reliable circle layer, always visible
         map.addLayer({
@@ -911,7 +920,7 @@ function Legend() {
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #c9beaf" }} />
+        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #ddd6cc" }} />
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Gebäude</span>
       </div>
       <div className="flex items-center gap-2">
