@@ -202,6 +202,9 @@ export default function Home() {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Type filter ───────────────────────────────────────────────────────────────
+  // visualIncludeRestaurants: updates instantly → drives checkbox appearance only
+  // includeRestaurants: updates in a transition → drives actual filtering
+  const [visualIncludeRestaurants, setVisualIncludeRestaurants] = useState(false);
   const [includeRestaurants, setIncludeRestaurants] = useState(false);
 
   // ── District filter ──────────────────────────────────────────────────────────
@@ -768,17 +771,20 @@ export default function Home() {
                     <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Typ</span>
                   </div>
                   <label
-                    onClick={() => setIncludeRestaurants((v) => !v)}
+                    onClick={() => {
+                      setVisualIncludeRestaurants((v) => !v);
+                      startFilterTransition(() => setIncludeRestaurants((v) => !v));
+                    }}
                     className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
                   >
                     <span className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 transition-all duration-150 ${
-                      includeRestaurants ? "bg-amber-400 border-amber-400" : "bg-white border-zinc-200"
+                      visualIncludeRestaurants ? "bg-amber-400 border-amber-400" : "bg-white border-zinc-200"
                     }`}>
                       <svg
                         width="9" height="7" viewBox="0 0 9 7" fill="none"
                         style={{
-                          opacity: includeRestaurants ? 1 : 0,
-                          transform: includeRestaurants ? "scale(1)" : "scale(0.5)",
+                          opacity: visualIncludeRestaurants ? 1 : 0,
+                          transform: visualIncludeRestaurants ? "scale(1)" : "scale(0.5)",
                           transition: "opacity 0.15s ease, transform 0.15s ease",
                         }}
                       >
