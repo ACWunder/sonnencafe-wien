@@ -493,39 +493,6 @@ export default function Home() {
         </button>
       </header>
 
-      {sunriseTime !== null && sunsetTime !== null && selectedTime !== null && (
-        <section className="shrink-0 border-b border-amber-100/80 bg-gradient-to-b from-[#fff8eb] via-[#fff6e4] to-[#fffaf0] px-3 pb-3 pt-2.5">
-          <div className="mx-auto flex max-w-5xl items-center gap-2 rounded-[20px] border border-amber-200/70 bg-white/80 px-3 py-3 shadow-[0_14px_36px_rgba(245,158,11,0.12)] backdrop-blur-xl md:gap-3 md:px-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-3">
-                <span className="shrink-0 text-[11px] font-medium text-amber-700/80">
-                  {formatMinuteLabel(sunriseTime)}
-                </span>
-                <input
-                  type="range"
-                  min={sunriseTime}
-                  max={sunsetTime}
-                  step={1}
-                  value={selectedTime}
-                  onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
-                  onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
-                  className="sun-time-slider h-10 flex-1"
-                  aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
-                />
-                <span className="shrink-0 text-[11px] font-medium text-orange-700/80">
-                  {formatMinuteLabel(sunsetTime)}
-                </span>
-              </div>
-            </div>
-            <div className="shrink-0 pl-1 text-right">
-              <div className="font-body text-[15px] font-medium leading-none text-zinc-500 md:text-[16px]">
-                {formatMinuteLabel(selectedTime)}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Impressum modal */}
       {showImpressum && (
         <div
@@ -773,6 +740,35 @@ export default function Home() {
             onSunTimeline={handleSunTimeline}
             onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
           />
+
+          {sunriseTime !== null && sunsetTime !== null && selectedTime !== null && (
+            <div className="pointer-events-none absolute left-1/2 top-3 z-[620] w-[min(calc(100%-24px),680px)] -translate-x-1/2 px-3 md:top-4">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <input
+                    type="range"
+                    min={sunriseTime}
+                    max={sunsetTime}
+                    step={1}
+                    value={selectedTime}
+                    onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
+                    onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
+                    className="sun-time-slider pointer-events-auto h-10 w-full"
+                    aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
+                  />
+                  <div className="mt-1 flex items-center justify-between px-0.5 text-[11px] font-medium text-white/88 [text-shadow:0_1px_4px_rgba(0,0,0,0.38)]">
+                    <span>{formatMinuteLabel(sunriseTime)}</span>
+                    <span>{formatMinuteLabel(sunsetTime)}</span>
+                  </div>
+                </div>
+                <div className="shrink-0 pt-2 text-right">
+                  <div className="font-body text-[14px] font-medium leading-none text-white/90 [text-shadow:0_1px_4px_rgba(0,0,0,0.4)] md:text-[15px]">
+                    {formatMinuteLabel(selectedTime)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isCafeSymbolsUpdating && (
             <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
