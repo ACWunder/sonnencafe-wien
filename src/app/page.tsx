@@ -742,9 +742,9 @@ export default function Home() {
           />
 
           {hasTimeSlider && (
-            <div className="pointer-events-none absolute left-3 right-3 top-3 z-[620] md:top-4">
+            <div className="pointer-events-none absolute left-3 right-3 top-4 z-[620] md:top-5">
               <div className="min-w-0">
-                <div className="rounded-[18px] border border-zinc-100 bg-white/90 px-2.5 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+                <div className="rounded-[18px] border border-zinc-100 bg-white/90 px-2.5 py-0.5 shadow-lg shadow-zinc-200/40 backdrop-blur-xl">
                   <div className="pr-0">
                     <input
                       type="range"
