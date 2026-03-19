@@ -849,12 +849,8 @@ export function MapView({
         </div>
       )}
 
-      {/* Compass + locate button stacked bottom-right */}
-      <div className="absolute z-[500] flex flex-col gap-3 items-center" style={{ bottom: "24px", right: "16px" }}>
-        <SunCompass
-          timeState={timeState}
-          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
-        />
+      {/* Locate button bottom-right */}
+      <div className="absolute z-[500]" style={{ bottom: "24px", right: "16px" }}>
         <button
           onClick={() => {
             if (!mapInstanceRef.current) return;
@@ -890,13 +886,21 @@ export function MapView({
           {locating ? (
             <div className="w-5 h-5 border-2 border-[#4285f4] border-t-transparent rounded-full animate-spin" />
           ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2.5L3 21.5l9-4 9 4z" fill="#4285f4"/>
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <path d="M12 2L4 22l8-3.5 8 3.5z" fill="#4285f4" transform="rotate(-45 12 12)"/>
             </svg>
           )}
         </button>
       </div>
-      <SunInfoOverlay timeState={timeState} />
+
+      {/* Sunrise/sunset + compass stacked top-right */}
+      <div className="absolute z-[500] flex flex-col gap-2 items-end" style={{ top: "12px", right: "12px" }}>
+        <SunInfoOverlay timeState={timeState} />
+        <SunCompass
+          timeState={timeState}
+          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
+        />
+      </div>
     </div>
   );
 }
@@ -907,9 +911,9 @@ function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: ()
   const pos  = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
   const isUp = pos.altitudeDeg > 0;
 
-  const size         = 72;
+  const size         = 60;
   const r            = size / 2;
-  const pad          = 13;
+  const pad          = 11;
   const innerR       = r - pad;
   const distFraction = isUp ? Math.max(0, 1 - pos.altitudeDeg / 90) : 1.0;
   const azRad        = (pos.azimuthDeg * Math.PI) / 180;
@@ -968,7 +972,7 @@ function SunInfoOverlay({ timeState }: { timeState: TimeState }) {
   const fmt   = (d: Date) => d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="absolute top-3 right-3 z-[500] bg-white/80 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/30 px-3.5 py-2">
+    <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/30 px-3.5 py-2">
       <div className="flex items-center gap-2.5 font-body text-zinc-500" style={{ fontSize: "12px" }}>
         <span>🌅 {fmt(times.sunrise)}</span>
         <span className="text-zinc-200">·</span>
