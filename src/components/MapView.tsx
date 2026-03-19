@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
 import { getSunPosition, getSunTimes } from "@/lib/sun";
 import { calcShadowPolygon } from "@/lib/buildingShadow";
+import { DISTRICT_BOUNDS, MAP_CENTER } from "@/lib/mapConfig";
 import type { BuildingFeature } from "@/app/api/buildings/route";
 
 // ─── spatial grid index ───────────────────────────────────────────────────────
@@ -45,15 +46,6 @@ class BuildingGrid {
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const DISTRICT_BOUNDS = {
-  south: 48.175, west: 16.333,
-  north: 48.230, east: 16.375,
-} as const;
-
-const MAP_CENTER: [number, number] = [
-  (DISTRICT_BOUNDS.south + DISTRICT_BOUNDS.north) / 2,
-  (DISTRICT_BOUNDS.west  + DISTRICT_BOUNDS.east)  / 2,
-];
 const NEUBAU_CENTER = MAP_CENTER;
 const FALLBACK_HEIGHT = 18;
 
@@ -848,11 +840,6 @@ export function MapView({
         </div>
       )}
 
-      {/* Sunrise/sunset — top right */}
-      <div className="absolute z-[500]" style={{ top: "12px", right: "12px" }}>
-        <SunInfoOverlay timeState={timeState} />
-      </div>
-
       {/* Compass + locate button stacked — bottom right */}
       <div className="absolute z-[500] flex flex-col gap-3 items-end" style={{ bottom: "24px", right: "16px" }}>
         <button
@@ -955,23 +942,6 @@ function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: ()
           <text x={r} y={r + 5} textAnchor="middle" fontSize="16" fill="#94a3b8">🌙</text>
         )}
       </svg>
-    </div>
-  );
-}
-
-// ─── sun info ─────────────────────────────────────────────────────────────────
-function SunInfoOverlay({ timeState }: { timeState: TimeState }) {
-  const date  = new Date(`${timeState.date}T${timeState.time}:00`);
-  const times = getSunTimes(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
-  const fmt   = (d: Date) => d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-
-  return (
-    <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/30 px-3.5 py-2">
-      <div className="flex items-center gap-2.5 font-body text-zinc-500" style={{ fontSize: "12px" }}>
-        <span>🌅 {fmt(times.sunrise)}</span>
-        <span className="text-zinc-200">·</span>
-        <span>🌇 {fmt(times.sunset)}</span>
-      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
 import { MapView } from "@/components/MapView";
 import { InstallBanner } from "@/components/InstallBanner";
 import { isRestaurantType } from "@/lib/overpass";
+import { DEFAULT_SUN_LOCATION } from "@/lib/mapConfig";
+import { getSunTimes } from "@/lib/sun";
 
 // ─── Opening hours parser (OSM format) ───────────────────────────────────────
 
@@ -179,11 +181,37 @@ function fuzzyScore(query: string, cafe: Cafe): number {
   return 0;
 }
 
+function timeToMinute(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minuteToTime(minute: number): string {
+  const h = Math.floor(minute / 60);
+  const m = minute % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function clampMinute(minute: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, minute));
+}
+
+function formatMinuteLabel(minute: number): string {
+  return new Intl.DateTimeFormat("de-AT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(2024, 5, 1, Math.floor(minute / 60), minute % 60));
+}
+
 export default function Home() {
+  const sunLocation = DEFAULT_SUN_LOCATION;
   const [timeState, setTimeState] = useState<TimeState>(() => {
     const now = new Date();
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
+  const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  const [sunriseTime, setSunriseTime] = useState<number | null>(null);
+  const [sunsetTime, setSunsetTime] = useState<number | null>(null);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -347,6 +375,34 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const dayDate = new Date(`${timeState.date}T12:00:00`);
+    const times = getSunTimes(sunLocation[0], sunLocation[1], dayDate);
+    const nextSunrise = times.sunrise.getHours() * 60 + times.sunrise.getMinutes();
+    const nextSunset = times.sunset.getHours() * 60 + times.sunset.getMinutes();
+    const currentMinute = timeToMinute(timeState.time);
+    const nextSelected = clampMinute(currentMinute, nextSunrise, nextSunset);
+
+    setSunriseTime((prev) => (prev === nextSunrise ? prev : nextSunrise));
+    setSunsetTime((prev) => (prev === nextSunset ? prev : nextSunset));
+    setSelectedTime((prev) => (prev === nextSelected ? prev : nextSelected));
+
+    const nextTime = minuteToTime(nextSelected);
+    setTimeState((prev) => (
+      prev.time === nextTime ? prev : { ...prev, time: nextTime }
+    ));
+  }, [timeState.date, sunLocation, timeState.time]);
+
+  const handleSliderTimeChange = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
+    const nextTime = minuteToTime(nextMinute);
+    setSelectedTime(nextMinute);
+    setTimeState((prev) => (
+      prev.time === nextTime ? prev : { ...prev, time: nextTime }
+    ));
+  }, [sunriseTime, sunsetTime]);
+
   const filtered = useMemo(() => {
     const q = search.trim();
     const listCafes = cafes.filter((c) => visibleCafeIds.has(c.id));
@@ -427,6 +483,46 @@ export default function Home() {
           <Info className="w-3.5 h-3.5" />
         </button>
       </header>
+
+      {sunriseTime !== null && sunsetTime !== null && selectedTime !== null && (
+        <section className="shrink-0 border-b border-amber-100/80 bg-gradient-to-b from-[#fff8eb] via-[#fff6e4] to-[#fffaf0] px-3 pb-3 pt-2.5">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 rounded-[20px] border border-amber-200/70 bg-white/80 px-3 py-3 shadow-[0_14px_36px_rgba(245,158,11,0.12)] backdrop-blur-xl md:px-4">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-500/80">
+                <span>Tageslicht</span>
+                <span>{formatMinuteLabel(sunriseTime)} - {formatMinuteLabel(sunsetTime)}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="shrink-0 text-[11px] font-medium text-amber-700/80">
+                  {formatMinuteLabel(sunriseTime)}
+                </span>
+                <input
+                  type="range"
+                  min={sunriseTime}
+                  max={sunsetTime}
+                  step={1}
+                  value={selectedTime}
+                  onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
+                  onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
+                  className="sun-time-slider h-10 flex-1"
+                  aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
+                />
+                <span className="shrink-0 text-[11px] font-medium text-orange-700/80">
+                  {formatMinuteLabel(sunsetTime)}
+                </span>
+              </div>
+            </div>
+            <div className="shrink-0 rounded-2xl border border-orange-200/80 bg-gradient-to-br from-amber-100 via-amber-50 to-orange-50 px-3 py-2 text-right shadow-[0_8px_24px_rgba(251,146,60,0.18)]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-500/80">
+                Ausgewählt
+              </div>
+              <div className="font-display text-[20px] font-bold leading-none text-orange-600 md:text-[22px]">
+                {formatMinuteLabel(selectedTime)}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Impressum modal */}
       {showImpressum && (
