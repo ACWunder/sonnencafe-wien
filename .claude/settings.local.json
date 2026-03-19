@@ -30,7 +30,9 @@
       "WebFetch(domain:data.opendataportal.at)",
       "WebFetch(domain:basemap.at)",
       "Bash(swift:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)"
     ]
   }
 }
