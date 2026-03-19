@@ -431,6 +431,7 @@ export default function Home() {
     const [h, m] = timeState.time.split(":").map(Number);
     return h * 60 + m;
   })();
+  const hasTimeSlider = sunriseTime !== null && sunsetTime !== null && selectedTime !== null;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7f6f3]">
@@ -729,33 +730,35 @@ export default function Home() {
             onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
           />
 
-          {sunriseTime !== null && sunsetTime !== null && selectedTime !== null && (
+          {hasTimeSlider && (
             <div className="pointer-events-none absolute left-1/2 top-3 z-[620] w-[min(calc(100%-24px),680px)] -translate-x-1/2 px-3 md:top-4">
               <div className="flex items-start gap-2 md:gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-px shrink-0 rounded-full bg-orange-400/80" />
-                    <div className="min-w-0 flex-1 rounded-full border border-white/80 bg-white/72 px-3 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
-                      <input
-                        type="range"
-                        min={sunriseTime}
-                        max={sunsetTime}
-                        step={1}
-                        value={selectedTime}
-                        onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
-                        onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
-                        className="sun-time-slider pointer-events-auto h-8 w-full"
-                        aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
-                      />
+                  <div className="rounded-[18px] border border-white/80 bg-white/72 px-3 py-1 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
+                    <div className="flex items-center gap-2">
+                      <span className="h-4 w-px shrink-0 rounded-full bg-orange-400/80" />
+                      <div className="min-w-0 flex-1">
+                        <input
+                          type="range"
+                          min={sunriseTime}
+                          max={sunsetTime}
+                          step={1}
+                          value={selectedTime}
+                          onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
+                          onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
+                          className="sun-time-slider pointer-events-auto h-8 w-full"
+                          aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
+                        />
+                      </div>
+                      <span className="h-4 w-px shrink-0 rounded-full bg-orange-400/80" />
                     </div>
-                    <span className="h-4 w-px shrink-0 rounded-full bg-orange-400/80" />
-                  </div>
-                  <div className="mt-0 flex items-center justify-between px-2 text-[11px] font-medium text-orange-500/95">
-                    <span>{formatMinuteLabel(sunriseTime)}</span>
-                    <span>{formatMinuteLabel(sunsetTime)}</span>
+                    <div className="mt-0 flex items-center justify-between px-2 text-[11px] font-medium text-orange-500/95">
+                      <span>{formatMinuteLabel(sunriseTime)}</span>
+                      <span>{formatMinuteLabel(sunsetTime)}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="pointer-events-auto shrink-0 rounded-[18px] border border-white/80 bg-white/82 px-3 py-2 text-right shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
+                <div className="pointer-events-auto shrink-0 rounded-[18px] border border-white/80 bg-white/82 px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
                   <div className="text-center font-body text-[15px] font-semibold leading-none text-zinc-600 md:text-[16px]">
                     {formatMinuteLabel(selectedTime)}
                   </div>
@@ -783,7 +786,9 @@ export default function Home() {
           {/* Hamburger — floating, mobile only */}
           <button
             onClick={() => { setSidebarOpen(true); setSelectedCafe(null); }}
-            className="md:hidden absolute top-3 left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500"
+            className={`md:hidden absolute left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 ${
+              hasTimeSlider ? "top-24" : "top-3"
+            }`}
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -792,7 +797,9 @@ export default function Home() {
           <button
             ref={filterButtonRef}
             onClick={() => { setShowFilter((v) => !v); setSelectedCafe(null); }}
-            className={`absolute top-20 left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center ${
+            className={`absolute left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center ${
+              hasTimeSlider ? "top-[108px]" : "top-20"
+            } ${
               filterActive
                 ? "bg-amber-400 border-amber-300 text-white"
                 : "bg-white/90 border-zinc-100 text-zinc-500"
@@ -804,7 +811,9 @@ export default function Home() {
 
           {/* Filter panel */}
           {showFilter && (
-            <div ref={filterPanelRef} className="absolute top-36 left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden">
+            <div ref={filterPanelRef} className={`absolute left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden ${
+              hasTimeSlider ? "top-44" : "top-36"
+            }`}>
                 <div className="flex items-center justify-between pl-3.5 pr-3.5 pt-2.5 pb-2">
                   <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Bezirke</span>
                   <button
