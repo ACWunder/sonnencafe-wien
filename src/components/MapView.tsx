@@ -856,10 +856,6 @@ export function MapView({
 
       {/* Compass + locate button stacked — bottom right */}
       <div className="absolute z-[500] flex flex-col gap-3 items-center" style={{ bottom: "24px", right: "16px" }}>
-        <SunCompass
-          timeState={timeState}
-          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
-        />
         <button
           onClick={() => {
             if (!mapInstanceRef.current) return;
@@ -900,6 +896,10 @@ export function MapView({
             </svg>
           )}
         </button>
+        <SunCompass
+          timeState={timeState}
+          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
+        />
       </div>
     </div>
   );
@@ -911,9 +911,9 @@ function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: ()
   const pos  = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
   const isUp = pos.altitudeDeg > 0;
 
-  const size         = 60;
+  const size         = 76;
   const r            = size / 2;
-  const pad          = 11;
+  const pad          = 13;
   const innerR       = r - pad;
   const distFraction = isUp ? Math.max(0, 1 - pos.altitudeDeg / 90) : 1.0;
   const azRad        = (pos.azimuthDeg * Math.PI) / 180;
