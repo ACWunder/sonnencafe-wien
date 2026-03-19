@@ -243,19 +243,23 @@ function polygonAreaM2(polygon: [number, number][]): number {
   return (Math.abs(area) / 2) * 111_000 * 74_000;
 }
 
-// Raster-based enclosed gap detection.
-// Rasterises all buildings onto a grid, flood-fills "outside" from the border,
-// then finds small connected non-building regions that were never reached
-// (i.e. fully enclosed by buildings). Returns bounding-box polygons for each.
-function computeGapPolygons(buildings: BuildingFeature[], maxAreaM2 = 50): [number, number][][] {
-  // ~3 m × 3 m cells over the district (1024 wide × 2048 tall)
-  const W = 1024, H = 2048;
+// Raster-based gap fill: rasterise all buildings, flood-fill "outside" from
+// the border, then paint every small enclosed non-building pixel directly onto
+// a canvas in the building colour. The canvas is shown as a raster image layer
+// on the map — pixels match the exact gap shape, no rectangle artefacts.
+// maxAreaM2: enclosed regions larger than this are left untouched (real parks etc.)
+function renderGapCanvas(
+  canvas: HTMLCanvasElement,
+  buildings: BuildingFeature[],
+  maxAreaM2 = 50,
+) {
+  const W = canvas.width, H = canvas.height;
   const dLng = DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west;
   const dLat = DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south;
   const cellAreaM2 = (dLng / W * 74_000) * (dLat / H * 111_000);
   const maxCells = Math.ceil(maxAreaM2 / cellAreaM2);
 
-  // Scanline-rasterise every building polygon
+  // Scanline-rasterise every building polygon onto the grid
   const grid = new Uint8Array(W * H);
   for (const b of buildings) {
     const poly = b.polygon as [number, number][];
@@ -280,10 +284,10 @@ function computeGapPolygons(buildings: BuildingFeature[], maxAreaM2 = 50): [numb
     }
   }
 
-  // Iterative flood-fill from all border cells → marks "outside"
+  // Iterative flood-fill from all border cells → marks reachable "outside"
   const outside = new Uint8Array(W * H);
   const stack: number[] = [];
-  const seed = (idx: number) => { if (!grid[idx] && !outside[idx]) { outside[idx] = 1; stack.push(idx); } };
+  const seed = (i: number) => { if (!grid[i] && !outside[i]) { outside[i] = 1; stack.push(i); } };
   for (let r = 0; r < H; r++) { seed(r * W); seed(r * W + W - 1); }
   for (let c = 1; c < W - 1; c++) { seed(c); seed((H - 1) * W + c); }
   while (stack.length) {
@@ -295,9 +299,13 @@ function computeGapPolygons(buildings: BuildingFeature[], maxAreaM2 = 50): [numb
     if (c < W - 1) seed(i + 1);
   }
 
-  // Find connected components of enclosed (non-building, non-outside) cells
+  // Find enclosed components; paint small ones pixel-exact onto the canvas
   const seen = new Uint8Array(W * H);
-  const result: [number, number][][] = [];
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, W, H);
+  const imgData = ctx.createImageData(W, H);
+  const px = imgData.data; // RGBA flat array
+
   for (let start = 0; start < W * H; start++) {
     if (grid[start] || outside[start] || seen[start]) continue;
     const comp: number[] = [];
@@ -315,20 +323,13 @@ function computeGapPolygons(buildings: BuildingFeature[], maxAreaM2 = 50): [numb
       if (c < W - 1) { const ni = i + 1; if (!grid[ni] && !outside[ni] && !seen[ni]) { seen[ni] = 1; q.push(ni); } }
     }
     if (tooLarge) continue;
-    // Emit bounding-box polygon for this gap
-    let minR = H, maxR = 0, minC = W, maxC = 0;
+    // Paint pixels with building colour #f0ebe3 = rgb(240, 235, 227)
     for (const i of comp) {
-      const r = (i / W) | 0, cc = i % W;
-      if (r < minR) minR = r; if (r > maxR) maxR = r;
-      if (cc < minC) minC = cc; if (cc > maxC) maxC = cc;
+      const p = i * 4;
+      px[p] = 240; px[p + 1] = 235; px[p + 2] = 227; px[p + 3] = 255;
     }
-    const latN = DISTRICT_BOUNDS.north - minR / H * dLat;
-    const latS = DISTRICT_BOUNDS.north - (maxR + 1) / H * dLat;
-    const lngW = DISTRICT_BOUNDS.west + minC / W * dLng;
-    const lngE = DISTRICT_BOUNDS.west + (maxC + 1) / W * dLng;
-    result.push([[latN, lngW], [latN, lngE], [latS, lngE], [latS, lngW]]);
   }
-  return result;
+  ctx.putImageData(imgData, 0, 0);
 }
 
 function polygonToGeoJSON(polygon: [number, number][]): number[][] {
@@ -370,6 +371,7 @@ export function MapView({
   const mapReadyRef    = useRef(false);  // true once map 'load' event fired
 
   const shadowCanvasRef   = useRef<HTMLCanvasElement | null>(null);
+  const gapCanvasRef      = useRef<HTMLCanvasElement | null>(null);
   const buildingCacheRef  = useRef<Map<number, BuildingFeature>>(new Map());
   const buildingGridRef   = useRef<BuildingGrid | null>(null);
   const shadowWorkerRef   = useRef<Worker | null>(null);
@@ -558,21 +560,23 @@ export function MapView({
         if (source) {
           source.setData({
             type: "FeatureCollection",
-            features: [
-              ...buildings
-                .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
-                .map((b) => ({
-                  type: "Feature",
-                  geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
-                  properties: { id: b.id },
-                })),
-              ...computeGapPolygons(buildings, 50).map((poly, i) => ({
+            features: buildings
+              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+              .map((b) => ({
                 type: "Feature",
-                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(poly)] },
-                properties: { id: -i - 1 },
+                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
+                properties: { id: b.id },
               })),
-            ],
           });
+        }
+
+        // Render enclosed gaps as pixel-exact canvas overlay
+        const gapCanvas = gapCanvasRef.current;
+        if (gapCanvas) {
+          renderGapCanvas(gapCanvas, buildings, 50);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const gapSrc = map.getSource("gap-source") as any;
+          gapSrc?.updateImage({ url: gapCanvas.toDataURL("image/png"), coordinates: SHADOW_COORDS });
         }
 
         // Build visual shadow layer and compute initial café statuses
@@ -679,6 +683,13 @@ export function MapView({
           ]);
         }
 
+        // ── gap canvas (same resolution as shadow canvas) ─────────────────
+
+        const gapCanvas = document.createElement("canvas");
+        gapCanvas.width  = SHADOW_W;
+        gapCanvas.height = SHADOW_H;
+        gapCanvasRef.current = gapCanvas;
+
         // ── shadow canvas ──────────────────────────────────────────────────
 
         const shadowCanvas = document.createElement("canvas");
@@ -687,6 +698,12 @@ export function MapView({
         shadowCanvasRef.current = shadowCanvas;
 
         // ── sources ────────────────────────────────────────────────────────
+
+        map.addSource("gap-source", {
+          type: "image",
+          url: gapCanvas.toDataURL("image/png"), // blank initially
+          coordinates: SHADOW_COORDS,
+        });
 
         map.addSource("green-areas-source", {
           type: "geojson",
@@ -755,6 +772,14 @@ export function MapView({
           type: "raster",
           source: "shadow-source",
           paint: { "raster-opacity": 0.55 },
+        }, before);
+
+        // Gap fill: pixel-exact raster covering small enclosed voids
+        map.addLayer({
+          id: "gap-fill",
+          type: "raster",
+          source: "gap-source",
+          paint: { "raster-opacity": 1.0, "raster-resampling": "nearest" },
         }, before);
 
         map.addLayer({
