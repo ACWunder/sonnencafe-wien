@@ -382,16 +382,10 @@ export default function Home() {
     const nextSunrise = times.sunrise.getHours() * 60 + times.sunrise.getMinutes();
     const nextSunset = times.sunset.getHours() * 60 + times.sunset.getMinutes();
     const currentMinute = timeToMinute(timeState.time);
-    const nextSelected = clampMinute(currentMinute, nextSunrise, nextSunset);
 
     setSunriseTime((prev) => (prev === nextSunrise ? prev : nextSunrise));
     setSunsetTime((prev) => (prev === nextSunset ? prev : nextSunset));
-    setSelectedTime((prev) => (prev === nextSelected ? prev : nextSelected));
-
-    const nextTime = minuteToTime(nextSelected);
-    setTimeState((prev) => (
-      prev.time === nextTime ? prev : { ...prev, time: nextTime }
-    ));
+    setSelectedTime((prev) => (prev === currentMinute ? prev : currentMinute));
   }, [timeState.date, sunLocation, timeState.time]);
 
   const handleSliderTimeChange = useCallback((minute: number) => {
@@ -432,6 +426,9 @@ export default function Home() {
     return h * 60 + m;
   })();
   const hasTimeSlider = sunriseTime !== null && sunsetTime !== null && selectedTime !== null;
+  const sliderMinute = hasTimeSlider
+    ? clampMinute(selectedTime, sunriseTime, sunsetTime)
+    : currentMinute;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7f6f3]">
@@ -751,7 +748,7 @@ export default function Home() {
                       min={sunriseTime}
                       max={sunsetTime}
                       step={1}
-                      value={selectedTime}
+                      value={sliderMinute}
                       onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
                       onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
