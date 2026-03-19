@@ -805,7 +805,7 @@ export function MapView({
     selectFromMapRef.current = false;
     mapInstanceRef.current.easeTo({
       center: [selectedCafe.lng, selectedCafe.lat],
-      zoom: fromMap ? mapInstanceRef.current.getZoom() : 17,
+      zoom: fromMap ? mapInstanceRef.current.getZoom() : 15,
       duration: 500,
     });
   }, [selectedCafe]);

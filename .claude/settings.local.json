@@ -28,7 +28,9 @@
       "WebFetch(domain:data.wien.gv.at)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:data.opendataportal.at)",
-      "WebFetch(domain:basemap.at)"
+      "WebFetch(domain:basemap.at)",
+      "Bash(swift:*)",
+      "Bash(npm run:*)"
     ]
   }
 }
