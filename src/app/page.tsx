@@ -225,6 +225,7 @@ export default function Home() {
     if (!includeRestaurants) result = result.filter((c) => !isRestaurantType(c.tags));
     return new Set(result.map((c) => c.id));
   }, [cafes, visualDistricts, includeRestaurants]);
+  const deferredVisibleCafeIds = useDeferredValue(visibleCafeIds);
 
   const toggleDistrict = useCallback((d: string) => {
     setVisualDistricts((prev) => {
@@ -668,7 +669,7 @@ export default function Home() {
           <MapView
             timeState={timeState}
             cafes={deferredCafesForMap}
-            visibleCafeIds={visibleCafeIds}
+            visibleCafeIds={deferredVisibleCafeIds}
             sunRemaining={sunRemaining}
             selectedCafe={selectedCafe}
             onCafeSelect={setSelectedCafe}
