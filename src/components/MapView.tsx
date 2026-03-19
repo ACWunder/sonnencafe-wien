@@ -277,6 +277,7 @@ export function MapView({
   const buildingCacheRef  = useRef<Map<number, BuildingFeature>>(new Map());
   const buildingGridRef   = useRef<BuildingGrid | null>(null);
   const shadowWorkerRef   = useRef<Worker | null>(null);
+  const sunDataTimeoutRef = useRef<number | null>(null);
   const sunGenRef         = useRef(0);
   const selectFromMapRef  = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -305,6 +306,21 @@ export function MapView({
   const [fetching,  setFetching]  = useState(false);
 
   // ── helpers ────────────────────────────────────────────────────────────────
+
+  function clearScheduledSunData() {
+    if (sunDataTimeoutRef.current !== null) {
+      window.clearTimeout(sunDataTimeoutRef.current);
+      sunDataTimeoutRef.current = null;
+    }
+  }
+
+  function scheduleSunDataRefresh(delay = 180) {
+    clearScheduledSunData();
+    sunDataTimeoutRef.current = window.setTimeout(() => {
+      sunDataTimeoutRef.current = null;
+      updateCafesSource(true);
+    }, delay);
+  }
 
   // Push updated café GeoJSON to the map source.
   // recomputeSunData = true → also kick off the heavy sun-remaining/timeline
@@ -432,8 +448,7 @@ export function MapView({
 
     // Fallback: render synchronously on main thread
     renderShadowCanvas(canvas, allBuildings, ts);
-    const source = map.getSource("shadow-source") as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    source?.updateImage({ url: canvas.toDataURL("image/png"), coordinates: SHADOW_COORDS });
+    map.triggerRepaint();
   }
 
   // Update café dot colors after pan/zoom. Shadow check uses per-café nearby buildings.
@@ -523,9 +538,7 @@ export function MapView({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const source = map.getSource("shadow-source") as any;
-        source?.updateImage({ url: canvas.toDataURL("image/png"), coordinates: SHADOW_COORDS });
+        map.triggerRepaint();
       };
     }
 
@@ -611,8 +624,9 @@ export function MapView({
         // Shadow source: raster image from the offscreen canvas.
         // Image sources avoid WebGL fill-opacity accumulation from overlapping polygons.
         map.addSource("shadow-source", {
-          type: "image",
-          url: shadowCanvas.toDataURL("image/png"), // blank initially
+          type: "canvas",
+          canvas: shadowCanvas,
+          animate: true,
           coordinates: SHADOW_COORDS,
         });
 
@@ -780,8 +794,7 @@ export function MapView({
 
     // Rebuild full visual shadow layer
     updateShadowSource(all, timeState);
-
-    updateCafesSource(true);
+    scheduleSunDataRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeState]);
 
@@ -814,6 +827,8 @@ export function MapView({
     return () => cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCafeIds]);
+
+  useEffect(() => clearScheduledSunData, []);
 
   // ── pan/zoom to selected café ─────────────────────────────────────────────
   // List selection zooms to 17; map click keeps current zoom.
