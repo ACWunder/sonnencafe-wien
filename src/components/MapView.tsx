@@ -853,10 +853,20 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCafe]);
 
-  // ── visibility filter changed (restaurant toggle) — fast path, no recompute ──
+  // ── visibility filter changed: update visible markers immediately, then
+  // refresh the expensive sun data once the frame is already painted ─────────
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
-    updateCafesSource(true);
+    updateCafesSource(false);
+
+    const rafId = requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (!mapInstanceRef.current || !mapReadyRef.current) return;
+        updateCafesSource(true);
+      }, 120);
+    });
+
+    return () => cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCafeIds]);
 
