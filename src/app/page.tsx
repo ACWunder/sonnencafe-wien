@@ -495,12 +495,8 @@ export default function Home() {
 
       {sunriseTime !== null && sunsetTime !== null && selectedTime !== null && (
         <section className="shrink-0 border-b border-amber-100/80 bg-gradient-to-b from-[#fff8eb] via-[#fff6e4] to-[#fffaf0] px-3 pb-3 pt-2.5">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 rounded-[20px] border border-amber-200/70 bg-white/80 px-3 py-3 shadow-[0_14px_36px_rgba(245,158,11,0.12)] backdrop-blur-xl md:px-4">
+          <div className="mx-auto flex max-w-5xl items-center gap-2 rounded-[20px] border border-amber-200/70 bg-white/80 px-3 py-3 shadow-[0_14px_36px_rgba(245,158,11,0.12)] backdrop-blur-xl md:gap-3 md:px-4">
             <div className="min-w-0 flex-1">
-              <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-500/80">
-                <span>Tageslicht</span>
-                <span>{formatMinuteLabel(sunriseTime)} - {formatMinuteLabel(sunsetTime)}</span>
-              </div>
               <div className="flex items-center gap-3">
                 <span className="shrink-0 text-[11px] font-medium text-amber-700/80">
                   {formatMinuteLabel(sunriseTime)}
@@ -521,11 +517,8 @@ export default function Home() {
                 </span>
               </div>
             </div>
-            <div className="shrink-0 rounded-2xl border border-orange-200/80 bg-gradient-to-br from-amber-100 via-amber-50 to-orange-50 px-3 py-2 text-right shadow-[0_8px_24px_rgba(251,146,60,0.18)]">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-500/80">
-                Ausgewählt
-              </div>
-              <div className="font-display text-[20px] font-bold leading-none text-orange-600 md:text-[22px]">
+            <div className="shrink-0 pl-1 text-right">
+              <div className="font-body text-[15px] font-medium leading-none text-zinc-500 md:text-[16px]">
                 {formatMinuteLabel(selectedTime)}
               </div>
             </div>
