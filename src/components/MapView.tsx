@@ -252,6 +252,8 @@ export function MapView({
   onSunTimelineRef.current = onSunTimeline;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
+  // Cache: cafe id → inShadow, so selection changes don't recompute shadows
+  const shadowCacheRef    = useRef<Map<string, boolean>>(new Map());
 
   const [fetching,  setFetching]  = useState(false);
   const [locating,  setLocating]  = useState(false);
@@ -267,12 +269,28 @@ export function MapView({
     const source = map.getSource("cafes-source");
     if (!source) return;
 
+    const selId = selectedCafeRef.current?.id ?? null;
+
+    // Selection-only update: reuse cached shadow state, skip heavy recomputation
+    if (!recomputeSunData && shadowCacheRef.current.size > 0) {
+      const features = cafesRef.current.map((cafe) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+        properties: {
+          id: cafe.id, name: cafe.name,
+          inShadow: shadowCacheRef.current.get(cafe.id) ?? true,
+          isSelected: cafe.id === selId,
+        },
+      }));
+      source.setData({ type: "FeatureCollection", features });
+      return;
+    }
+
     const ts     = timeStateRef.current;
     const date   = new Date(`${ts.date}T${ts.time}:00`);
     const sunPos = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
     const OFFSET_M = 10;
     const azRad  = (sunPos.azimuthDeg * Math.PI) / 180;
-    const selId  = selectedCafeRef.current?.id ?? null;
 
     const allBuildings = Array.from(buildingCacheRef.current.values());
 
@@ -300,6 +318,8 @@ export function MapView({
           return poly.length >= 3 && pointInPolygon(chkLat, chkLng, poly);
         });
       }
+
+      shadowCacheRef.current.set(cafe.id, inShadow);
 
       return {
         type: "Feature",
