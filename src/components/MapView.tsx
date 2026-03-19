@@ -883,6 +883,7 @@ export function MapView({
             );
           }}
           className="w-[56px] h-[56px] bg-white rounded-full shadow-xl shadow-zinc-300/40 border border-zinc-100 flex items-center justify-center"
+          style={{ marginRight: "5px" }}
           title="Meinen Standort anzeigen"
         >
           <svg width="22" height="22" viewBox="0 0 24 24">
