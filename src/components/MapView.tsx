@@ -205,6 +205,64 @@ function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   return ring;
 }
 
+// ─── marker SVGs (2× for retina, loaded once via map.addImage) ───────────────
+
+const MARKER_SVGS: Record<string, string> = {
+  "cafe-sunny": `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+    <circle cx="28" cy="28" r="18" fill="#fed7aa" opacity="0.3"/>
+    <g stroke="#f97316" stroke-width="3" stroke-linecap="round">
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(0,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(45,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(90,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(135,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(180,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(225,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(270,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(315,28,28)"/>
+    </g>
+    <circle cx="28" cy="28" r="12" fill="#f97316" stroke="white" stroke-width="3.5"/>
+  </svg>`,
+
+  "cafe-sunny-sel": `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+    <circle cx="28" cy="28" r="18" fill="#fed7aa" opacity="0.3"/>
+    <g stroke="#f97316" stroke-width="3" stroke-linecap="round">
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(0,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(45,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(90,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(135,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(180,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(225,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(270,28,28)"/>
+      <line x1="28" y1="3"  x2="28" y2="12" transform="rotate(315,28,28)"/>
+    </g>
+    <circle cx="28" cy="28" r="12" fill="#f97316" stroke="white" stroke-width="5"/>
+  </svg>`,
+
+  "cafe-shade": `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="9" fill="#475569" stroke="white" stroke-width="3" opacity="0.85"/>
+  </svg>`,
+
+  "cafe-shade-sel": `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="9" fill="#475569" stroke="white" stroke-width="5" opacity="0.9"/>
+  </svg>`,
+};
+
+function loadMarkerImages(map: any): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const entries = Object.entries(MARKER_SVGS);
+  return Promise.all(
+    entries.map(([name, svg]) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          map.addImage(name, img, { pixelRatio: 2 });
+          resolve();
+        };
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      }),
+    ),
+  ).then(() => undefined);
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
@@ -435,12 +493,14 @@ export function MapView({
 
       mapInstanceRef.current = map;
 
-      map.on("load", () => {
+      map.on("load", async () => {
         if (!mounted) return;
         mapReadyRef.current = true;
 
         // Find the first symbol layer in the base style (road/place labels, icons).
         // All our custom layers are inserted before it so labels always render on top.
+        await loadMarkerImages(map);
+
         const firstSymbolId = map.getStyle().layers.find(
           (l: { type: string }) => l.type === "symbol"
         )?.id;
@@ -553,21 +613,27 @@ export function MapView({
           paint: { "line-color": "#94a3b8", "line-width": 0.8 },
         }, before);
 
-        // Café dots — color + size driven by GeoJSON properties
+        // Café markers — SVG icons, sunny with rays / shade flat
         map.addLayer({
           id: "cafes",
-          type: "circle",
+          type: "symbol",
           source: "cafes-source",
-          paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              13, ["case", ["get", "isSelected"], 6, 3],
-              16, ["case", ["get", "isSelected"], 7, 4],
-              17, ["case", ["get", "isSelected"], 8, 5],
+          layout: {
+            "icon-image": ["case",
+              ["get", "isSelected"],
+              ["case", ["get", "inShadow"], "cafe-shade-sel", "cafe-sunny-sel"],
+              ["case", ["get", "inShadow"], "cafe-shade",     "cafe-sunny"],
             ],
-            "circle-color": ["case", ["get", "inShadow"], "#374151", "#ea580c"],
-            "circle-stroke-width": ["case", ["get", "isSelected"], 2.5, 0],
-            "circle-stroke-color": "#ffffff",
+            "icon-size": [
+              "interpolate", ["linear"], ["zoom"],
+              12, 0.48,
+              14, 0.62,
+              16, 0.78,
+              18, 0.95,
+            ],
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-anchor": "center",
           },
         }, before);
 
@@ -747,11 +813,23 @@ function Legend() {
         Legende
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#fde68a", border: "1.5px solid #f59e0b" }} />
+        {/* Sunny marker preview */}
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <g stroke="#f97316" strokeWidth="1" strokeLinecap="round">
+            {[0,45,90,135,180,225,270,315].map((a) => (
+              <line key={a} x1="8" y1="1.5" x2="8" y2="4"
+                transform={`rotate(${a},8,8)`} />
+            ))}
+          </g>
+          <circle cx="8" cy="8" r="3.5" fill="#f97316" stroke="white" strokeWidth="1.2"/>
+        </svg>
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Sonnig</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#334155", opacity: 0.65 }} />
+        {/* Shade marker preview */}
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="4" fill="#475569" stroke="white" strokeWidth="1.5" opacity="0.85"/>
+        </svg>
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
