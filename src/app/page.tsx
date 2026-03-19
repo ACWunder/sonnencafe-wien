@@ -783,9 +783,7 @@ export default function Home() {
 
           {isCafeSymbolsUpdating && (
             <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/78 backdrop-blur-sm shadow-[0_10px_30px_rgba(251,191,36,0.18)]">
-                <div className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-amber-200 border-t-amber-400" />
-              </div>
+              <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-amber-200/90 border-t-amber-400" />
             </div>
           )}
 
