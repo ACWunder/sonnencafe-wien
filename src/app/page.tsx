@@ -755,7 +755,7 @@ export default function Home() {
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
                   </div>
-                  <div className="-mt-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
+                  <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
                     <span>{formatMinuteLabel(sunriseTime)}</span>
                     <span>{formatMinuteLabel(sunsetTime)}</span>
                   </div>
