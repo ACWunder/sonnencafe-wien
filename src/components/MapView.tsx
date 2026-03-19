@@ -888,13 +888,9 @@ export function MapView({
           className="w-[56px] h-[56px] bg-white rounded-full shadow-xl shadow-zinc-300/40 border border-zinc-100 flex items-center justify-center"
           title="Meinen Standort anzeigen"
         >
-          {locating ? (
-            <div className="w-5 h-5 border-2 border-[#4285f4] border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24">
-              <path d="M21 3L3 10.53v.98l6.84 2.65L12.48 21h.98L21 3z" fill="#4285f4"/>
-            </svg>
-          )}
+          <svg width="22" height="22" viewBox="0 0 24 24">
+            <path d="M21 3L3 10.53v.98l6.84 2.65L12.48 21h.98L21 3z" fill="#4285f4"/>
+          </svg>
         </button>
         <SunCompass
           timeState={timeState}
