@@ -474,6 +474,17 @@ export default function Home() {
         />
 
         <button
+          onClick={() => {
+            const now = new Date();
+            setIsCafeSymbolsUpdating(true);
+            setTimeState({ date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") });
+          }}
+          className="flex items-center gap-1 bg-gradient-to-br from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-body font-semibold rounded-[8px] transition-all shadow-sm shadow-amber-200/60 active:scale-95 shrink-0 px-2 py-1"
+        >
+          <span className="text-[11px]">Now</span>
+        </button>
+
+        <button
           onClick={() => { setShowImpressum(true); setSelectedCafe(null); }}
           className="ml-auto text-zinc-300 hover:text-zinc-500 transition-colors p-1 shrink-0"
           title="Impressum"
@@ -731,10 +742,10 @@ export default function Home() {
           />
 
           {hasTimeSlider && (
-            <div className="pointer-events-none absolute left-1/2 top-3 z-[620] w-[min(calc(100%-24px),680px)] -translate-x-1/2 px-3 md:top-4">
-              <div className="flex items-start gap-2 md:gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="rounded-[18px] border border-white/80 bg-white/72 px-3 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
+            <div className="pointer-events-none absolute left-3 right-3 top-3 z-[620] md:top-4">
+              <div className="min-w-0">
+                <div className="rounded-[18px] border border-white/80 bg-white/72 px-2.5 py-0.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
+                  <div className="pr-0">
                     <input
                       type="range"
                       min={sunriseTime}
@@ -746,26 +757,11 @@ export default function Home() {
                       className="sun-time-slider pointer-events-auto h-8 w-full"
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
-                    <div className="-mt-1 flex items-center justify-between px-2 text-[11px] font-medium text-orange-500/95">
-                      <span>{formatMinuteLabel(sunriseTime)}</span>
-                      <span>{formatMinuteLabel(sunsetTime)}</span>
-                    </div>
                   </div>
-                </div>
-                <div className="pointer-events-auto shrink-0 rounded-[18px] border border-white/80 bg-white/82 px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-[6px]">
-                  <div className="text-center font-body text-[15px] font-semibold leading-none text-zinc-600 md:text-[16px]">
-                    {formatMinuteLabel(selectedTime)}
+                  <div className="-mt-1.5 flex items-center justify-between px-2 text-[11px] font-medium text-orange-500/95">
+                    <span>{formatMinuteLabel(sunriseTime)}</span>
+                    <span>{formatMinuteLabel(sunsetTime)}</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      const now = new Date();
-                      setIsCafeSymbolsUpdating(true);
-                      setTimeState({ date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") });
-                    }}
-                    className="mt-2 flex items-center gap-1 bg-gradient-to-br from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-body font-semibold rounded-[8px] transition-all shadow-sm shadow-amber-200/60 active:scale-95 shrink-0 px-2 py-1 ml-auto"
-                  >
-                    <span className="text-[11px]">Now</span>
-                  </button>
                 </div>
               </div>
             </div>
