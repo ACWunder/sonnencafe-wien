@@ -887,7 +887,7 @@ export function MapView({
             <div className="w-5 h-5 border-2 border-[#4285f4] border-t-transparent rounded-full animate-spin" />
           ) : (
             <svg width="22" height="22" viewBox="0 0 24 24">
-              <path d="M12 2L4 22l8-3.5 8 3.5z" fill="#4285f4" transform="rotate(-45 12 12)"/>
+              <path d="M12 0L7 24l5-2.5 5 2.5z" fill="#4285f4" transform="rotate(45 12 12)"/>
             </svg>
           )}
         </button>
