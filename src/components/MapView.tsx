@@ -316,77 +316,11 @@ export function MapView({
 
     const selId     = selectedCafeRef.current?.id ?? null;
     const visibleIds = visibleCafeIdsRef.current;
-
-    // Fast path: reuse cached shadow state (selection change OR visibility-only change)
-    if (!recomputeSunData && shadowCacheRef.current.size > 0) {
-      const features = cafesRef.current
-        .filter((c) => !visibleIds || visibleIds.has(c.id))
-        .map((cafe) => ({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-          properties: {
-            id: cafe.id, name: cafe.name,
-            inShadow: Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id)
-              ? sunRemainingRef.current[cafe.id] === null
-              : (shadowCacheRef.current.get(cafe.id) ?? true),
-            isSelected: cafe.id === selId,
-          },
-        }));
-      source.setData({ type: "FeatureCollection", features });
-      return;
-    }
-
-    const ts     = timeStateRef.current;
-    const date   = new Date(`${ts.date}T${ts.time}:00`);
-    const sunPos = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
-    const OFFSET_M = 10;
-    const azRad  = (sunPos.azimuthDeg * Math.PI) / 180;
-    const allBuildings = Array.from(buildingCacheRef.current.values());
     const visibleCafes = cafesRef.current.filter((c) => !visibleIds || visibleIds.has(c.id));
-    const mapBounds = map.getBounds();
-    const vp = mapBounds ? {
-      south: mapBounds.getSouth() - 0.005,
-      north: mapBounds.getNorth() + 0.005,
-      west:  mapBounds.getWest()  - 0.005,
-      east:  mapBounds.getEast()  + 0.005,
-    } : null;
-
     const features = visibleCafes.map((cafe) => {
-      const hasKnownSunStatus = Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id);
-      const inViewport = !vp || (
-        cafe.lat >= vp.south && cafe.lat <= vp.north &&
-        cafe.lng >= vp.west  && cafe.lng <= vp.east
-      );
-
-      let chkLat = cafe.lat, chkLng = cafe.lng;
-      if (sunPos.altitudeDeg > 0) {
-        const dlat = (OFFSET_M * Math.cos(azRad)) / 111_000;
-        const dlng = (OFFSET_M * Math.sin(azRad)) / (111_000 * Math.cos((cafe.lat * Math.PI) / 180));
-        chkLat = cafe.lat + dlat;
-        chkLng = cafe.lng + dlng;
-      }
-
-      let inShadow: boolean;
-      if (hasKnownSunStatus && !recomputeSunData) {
-        inShadow = sunRemainingRef.current[cafe.id] === null;
-      } else if (!inViewport || sunPos.altitudeDeg <= 0) {
-        inShadow = true;
-      } else {
-        const LAT_MAX = 200 / 111_000;
-        const LNG_MAX = 200 / (111_000 * Math.cos((cafe.lat * Math.PI) / 180));
-        const nearby = buildingGridRef.current
-          ? buildingGridRef.current.getNearby(cafe.lat, cafe.lng)
-          : allBuildings.filter((b) => {
-              const [bLat, bLng] = b.polygon[0];
-              return Math.abs(bLat - cafe.lat) < LAT_MAX && Math.abs(bLng - cafe.lng) < LNG_MAX;
-            });
-        inShadow = nearby.some((b) => {
-          const poly = calcShadowPolygon(b.polygon, b.height ?? FALLBACK_HEIGHT, sunPos.altitudeDeg, sunPos.azimuthDeg);
-          return poly.length >= 3 && pointInPolygon(chkLat, chkLng, poly);
-        });
-      }
-
-      shadowCacheRef.current.set(cafe.id, inShadow);
+      const inShadow = Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id)
+        ? sunRemainingRef.current[cafe.id] === null
+        : (shadowCacheRef.current.get(cafe.id) ?? true);
 
       return {
         type: "Feature",
@@ -402,6 +336,7 @@ export function MapView({
     // Heavy computation: sun-remaining + day timeline for all cafés.
     // Uses requestIdleCallback so chunks only run when the browser is idle,
     // keeping map gestures smooth. Generation counter cancels stale runs.
+    const ts = timeStateRef.current;
     const currentDate = new Date(`${ts.date}T${ts.time}:00`);
     const dayDate     = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
     const chunkBounds = map.getBounds();
