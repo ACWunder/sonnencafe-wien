@@ -413,18 +413,21 @@ export function MapView({
         const source = mapInstanceRef.current?.getSource("cafes-source");
         if (source && mapReadyRef.current) {
           const selId = selectedCafeRef.current?.id ?? null;
+          const visibleIds = visibleCafeIdsRef.current;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (source as any).setData({
             type: "FeatureCollection",
-            features: allCafes.map((cafe) => ({
-              type: "Feature",
-              geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-              properties: {
-                id: cafe.id, name: cafe.name,
-                inShadow: remaining[cafe.id] === null,
-                isSelected: cafe.id === selId,
-              },
-            })),
+            features: allCafes
+              .filter((cafe) => !visibleIds || visibleIds.has(cafe.id))
+              .map((cafe) => ({
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+                properties: {
+                  id: cafe.id, name: cafe.name,
+                  inShadow: remaining[cafe.id] === null,
+                  isSelected: cafe.id === selId,
+                },
+              })),
           });
         }
       }
