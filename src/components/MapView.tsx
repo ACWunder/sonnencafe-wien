@@ -87,6 +87,8 @@ interface MapViewProps {
   onCafeSelect: (cafe: Cafe | null) => void;
   onSunRemaining: (data: Record<string, number | null>) => void;
   onSunTimeline: (data: SunTimelineData) => void;
+  // Optional: subset of cafe IDs to show markers for (undefined = show all)
+  visibleCafeIds?: Set<string>;
 }
 
 // ─── sun computation (unchanged) ─────────────────────────────────────────────
@@ -261,7 +263,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline,
+  timeState, cafes, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, visibleCafeIds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -291,7 +293,9 @@ export function MapView({
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
-  const shadowCacheRef    = useRef<Map<string, boolean>>(new Map());
+  const shadowCacheRef       = useRef<Map<string, boolean>>(new Map());
+  const visibleCafeIdsRef    = useRef<Set<string> | undefined>(visibleCafeIds);
+  visibleCafeIdsRef.current  = visibleCafeIds;
 
   const [fetching,  setFetching]  = useState(false);
   const [locating,  setLocating]  = useState(false);
@@ -307,19 +311,22 @@ export function MapView({
     const source = map.getSource("cafes-source");
     if (!source) return;
 
-    const selId = selectedCafeRef.current?.id ?? null;
+    const selId     = selectedCafeRef.current?.id ?? null;
+    const visibleIds = visibleCafeIdsRef.current;
 
-    // Selection-only update: reuse cached shadow state, skip heavy recomputation
+    // Fast path: reuse cached shadow state (selection change OR visibility-only change)
     if (!recomputeSunData && shadowCacheRef.current.size > 0) {
-      const features = cafesRef.current.map((cafe) => ({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-        properties: {
-          id: cafe.id, name: cafe.name,
-          inShadow: shadowCacheRef.current.get(cafe.id) ?? true,
-          isSelected: cafe.id === selId,
-        },
-      }));
+      const features = cafesRef.current
+        .filter((c) => !visibleIds || visibleIds.has(c.id))
+        .map((cafe) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+          properties: {
+            id: cafe.id, name: cafe.name,
+            inShadow: shadowCacheRef.current.get(cafe.id) ?? true,
+            isSelected: cafe.id === selId,
+          },
+        }));
       source.setData({ type: "FeatureCollection", features });
       return;
     }
@@ -330,7 +337,9 @@ export function MapView({
     const OFFSET_M = 10;
     const azRad  = (sunPos.azimuthDeg * Math.PI) / 180;
 
-    const features = cafesRef.current.map((cafe) => {
+    // Compute shadows for ALL cafes and cache; only include visible ones in features
+    const features: object[] = [];
+    for (const cafe of cafesRef.current) {
       let chkLat = cafe.lat, chkLng = cafe.lng;
       if (sunPos.altitudeDeg > 0) {
         const dlat = (OFFSET_M * Math.cos(azRad)) / 111_000;
@@ -354,12 +363,15 @@ export function MapView({
 
       shadowCacheRef.current.set(cafe.id, inShadow);
 
-      return {
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
-        properties: { id: cafe.id, name: cafe.name, inShadow, isSelected: cafe.id === selId },
-      };
-    });
+      // Only add to map features if this cafe is visible
+      if (!visibleIds || visibleIds.has(cafe.id)) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+          properties: { id: cafe.id, name: cafe.name, inShadow, isSelected: cafe.id === selId },
+        });
+      }
+    }
 
     source.setData({ type: "FeatureCollection", features });
 
@@ -796,6 +808,13 @@ export function MapView({
     updateCafesSource(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCafe]);
+
+  // ── visibility filter changed (restaurant toggle) — fast path, no recompute ──
+  useEffect(() => {
+    if (!mapInstanceRef.current || !mapReadyRef.current) return;
+    updateCafesSource(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCafeIds]);
 
   // ── pan/zoom to selected café ─────────────────────────────────────────────
   // List selection zooms to 17; map click keeps current zoom.

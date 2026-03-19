@@ -186,12 +186,20 @@ export default function Home() {
     });
   }, [cafes]);
 
+  // All cafes in selected districts — passed to MapView so it pre-computes shadows
+  // for restaurants in the background even when the toggle is off.
   const districtFilteredCafes = useMemo(() => {
-    let result = cafes;
-    if (!includeRestaurants) result = result.filter((c) => !isRestaurantType(c.tags));
-    if (filterDistricts) result = result.filter((c) => filterDistricts.has(c.district ?? "Wien"));
-    return result;
-  }, [cafes, filterDistricts, includeRestaurants]);
+    if (!filterDistricts) return cafes;
+    return cafes.filter((c) => filterDistricts.has(c.district ?? "Wien"));
+  }, [cafes, filterDistricts]);
+
+  // IDs of cafes to actually show as markers (respects restaurant toggle)
+  const visibleCafeIds = useMemo(() => {
+    const visible = includeRestaurants
+      ? districtFilteredCafes
+      : districtFilteredCafes.filter((c) => !isRestaurantType(c.tags));
+    return new Set(visible.map((c) => c.id));
+  }, [districtFilteredCafes, includeRestaurants]);
 
   const toggleDistrict = useCallback((d: string) => {
     const computeNext = (prev: Set<string> | null) => {
@@ -320,12 +328,13 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = search.trim();
+    const listCafes = districtFilteredCafes.filter((c) => visibleCafeIds.has(c.id));
     if (!q) {
-      return [...districtFilteredCafes].sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
+      return [...listCafes].sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
     }
 
     // Score every cafe; keep those with any match
-    const scored = districtFilteredCafes
+    const scored = listCafes
       .map((c) => ({ cafe: c, score: fuzzyScore(q, c) }))
       .filter(({ score }) => score > 0);
 
@@ -337,7 +346,7 @@ export default function Home() {
     );
 
     return scored.map(({ cafe }) => cafe);
-  }, [districtFilteredCafes, search, sunRemaining]);
+  }, [districtFilteredCafes, visibleCafeIds, search, sunRemaining]);
 
   const currentMinute = (() => {
     const [h, m] = timeState.time.split(":").map(Number);
@@ -639,6 +648,7 @@ export default function Home() {
           <MapView
             timeState={timeState}
             cafes={deferredCafesForMap}
+            visibleCafeIds={visibleCafeIds}
             selectedCafe={selectedCafe}
             onCafeSelect={setSelectedCafe}
             onSunRemaining={handleSunRemaining}
