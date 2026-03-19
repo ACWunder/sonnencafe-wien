@@ -220,7 +220,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
     map.addImage("cafe-sunny", ctx.getImageData(0, 0, 40, 40), { pixelRatio: 2 });
     onReady();
   };
-  img.src = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2600.png";
+  img.src = "/sun-emoji.png";
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
