@@ -57,8 +57,8 @@ const MAP_CENTER: [number, number] = [
 const NEUBAU_CENTER = MAP_CENTER;
 const FALLBACK_HEIGHT = 18;
 
-// OpenFreeMap positron — free, no API key, clean light style
-const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
+// OpenFreeMap bright — free, no API key, Google-Maps-like colours
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
 
 // Shadow canvas: pre-rendered at a fixed resolution and fed to MapLibre as
 // a raster image source. A single ctx.fill() call on the full path produces
@@ -550,19 +550,17 @@ export function MapView({
         const before = firstSymbolId; // undefined is fine — appends to end if no symbols
 
         // ── filter place labels ────────────────────────────────────────────
-        // In OpenFreeMap positron, "label_other" is a catch-all that renders
-        // every place class not explicitly listed (city/country/state/town/village).
-        // That includes both "suburb" (= official Bezirke, keep) and
-        // "neighbourhood"/"quarter" (= Grätzl like Strozziggrund, hide).
-        // We replace the filter with the same match expression but add the
-        // unwanted classes to the exclusion list.
-        map.setFilter("label_other", [
-          "match", ["get", "class"],
-          ["city", "continent", "country", "hamlet", "isolated_dwelling",
-           "neighbourhood", "quarter", "state", "town", "village"],
-          false,
-          true,
-        ]);
+        // Hide neighbourhood/quarter labels (Grätzl names) – keep suburb/Bezirke.
+        // Guard: only apply if the layer actually exists in this style.
+        if (map.getLayer("label_other")) {
+          map.setFilter("label_other", [
+            "match", ["get", "class"],
+            ["city", "continent", "country", "hamlet", "isolated_dwelling",
+             "neighbourhood", "quarter", "state", "town", "village"],
+            false,
+            true,
+          ]);
+        }
 
         // ── shadow canvas ──────────────────────────────────────────────────
 
@@ -621,7 +619,7 @@ export function MapView({
           id: "green-areas",
           type: "fill",
           source: "green-areas-source",
-          paint: { "fill-color": "#86efac", "fill-opacity": 0.55 },
+          paint: { "fill-color": "#aad3a0", "fill-opacity": 0.55 },
         }, before);
 
         map.addLayer({
@@ -646,14 +644,14 @@ export function MapView({
           id: "buildings-fill",
           type: "fill",
           source: "buildings-source",
-          paint: { "fill-color": "#e2e8f0", "fill-opacity": 1.0 },
+          paint: { "fill-color": "#f0ebe3", "fill-opacity": 1.0 },
         }, before);
 
         map.addLayer({
           id: "buildings-outline",
           type: "line",
           source: "buildings-source",
-          paint: { "line-color": "#94a3b8", "line-width": 0.8 },
+          paint: { "line-color": "#c9beaf", "line-width": 0.8 },
         }, before);
 
         // Shade cafés — reliable circle layer, always visible
@@ -799,8 +797,7 @@ export function MapView({
         if (!mapInstanceRef.current || !mapReadyRef.current) return;
         updateCafesSource(true);
       }, 120);
-    });
-
+    }); 
     return () => cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCafeIds]);
@@ -907,11 +904,11 @@ function Legend() {
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#e2e8f0", border: "1.5px solid #cbd5e1" }} />
+        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #c9beaf" }} />
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Gebäude</span>
       </div>
       <div className="flex items-center gap-2">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#86efac" }} />
+        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#aad3a0" }} />
         <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Grünfläche</span>
       </div>
     </div>
