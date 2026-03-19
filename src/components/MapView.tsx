@@ -205,41 +205,22 @@ function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   return ring;
 }
 
-// ─── marker images ────────────────────────────────────────────────────────────
-
-function registerMarkerImages(map: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  function mk(w: number, h: number, fn: (ctx: CanvasRenderingContext2D) => void): ImageData {
-    const c = document.createElement("canvas");
-    c.width = w; c.height = h;
+// Load Twemoji sun PNG and add as map image; calls onReady when done.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadSunEmoji(map: any, onReady: () => void) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => { map.addImage("cafe-sunny", img); onReady(); };
+  img.onerror = () => {
+    // Fallback: plain orange circle
+    const c = document.createElement("canvas"); c.width = 40; c.height = 40;
     const ctx = c.getContext("2d")!;
-    fn(ctx);
-    return ctx.getImageData(0, 0, w, h);
-  }
-
-  // ☀️ emoji — browser renders Apple emoji on Apple devices
-  // 80×80 canvas @pixelRatio:2 → displays as 40px at icon-size 1.0
-  map.addImage("cafe-sunny", mk(80, 80, (ctx) => {
-    ctx.font = "60px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("☀️", 40, 43);
-  }), { pixelRatio: 2 });
-
-  // Shade dot — slightly larger than old circle (was r≈4px display, now r≈7px)
-  // 56×56 canvas @pixelRatio:2 → displays as 28px at icon-size 1.0
-  map.addImage("cafe-shade", mk(56, 56, (ctx) => {
-    ctx.shadowColor = "rgba(0,0,0,0.22)";
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 1.5;
-    ctx.beginPath();
-    ctx.arc(28, 28, 18, 0, Math.PI * 2);
-    ctx.fillStyle = "#374151";
-    ctx.fill();
-    ctx.shadowColor = "transparent";
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }), { pixelRatio: 2 });
+    ctx.beginPath(); ctx.arc(20, 20, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#f59e0b"; ctx.fill();
+    map.addImage("cafe-sunny", ctx.getImageData(0, 0, 40, 40), { pixelRatio: 2 });
+    onReady();
+  };
+  img.src = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2600.png";
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -475,7 +456,6 @@ export function MapView({
       map.on("load", () => {
         if (!mounted) return;
         mapReadyRef.current = true;
-        registerMarkerImages(map);
 
         // Find the first symbol layer in the base style (road/place labels, icons).
         // All our custom layers are inserted before it so labels always render on top.
@@ -591,23 +571,48 @@ export function MapView({
           paint: { "line-color": "#94a3b8", "line-width": 0.8 },
         }, before);
 
-        // Café markers — emoji for sunny, dot for shade
+        // Shade cafés — reliable circle layer, always visible
         map.addLayer({
           id: "cafes",
-          type: "symbol",
+          type: "circle",
           source: "cafes-source",
-          layout: {
-            "icon-image": ["case", ["get", "inShadow"], "cafe-shade", "cafe-sunny"],
-            "icon-size": [
-              "*",
-              ["interpolate", ["linear"], ["zoom"], 12, 0.38, 14, 0.52, 16, 0.65, 18, 0.8],
-              ["case", ["get", "isSelected"], 1.55, 1.0],
+          filter: ["==", ["get", "inShadow"], true],
+          paint: {
+            "circle-radius": [
+              "interpolate", ["linear"], ["zoom"],
+              13, ["case", ["get", "isSelected"], 8, 5],
+              16, ["case", ["get", "isSelected"], 10, 6],
+              17, ["case", ["get", "isSelected"], 11, 7],
             ],
-            "icon-allow-overlap": true,
-            "icon-ignore-placement": true,
-            "icon-anchor": "center",
+            "circle-color": "#374151",
+            "circle-stroke-width": ["case", ["get", "isSelected"], 2.5, 1.5],
+            "circle-stroke-color": "#ffffff",
           },
         }, before);
+
+        // Sunny cafés — ☀️ emoji loaded from Twemoji CDN, added once image is ready
+        loadSunEmoji(map, () => {
+          if (!mapReadyRef.current) return;
+          map.addLayer({
+            id: "cafes-sunny",
+            type: "symbol",
+            source: "cafes-source",
+            filter: ["==", ["get", "inShadow"], false],
+            layout: {
+              "icon-image": "cafe-sunny",
+              "icon-size": [
+                "interpolate", ["linear"], ["zoom"],
+                12, ["case", ["get", "isSelected"], 0.48, 0.32],
+                14, ["case", ["get", "isSelected"], 0.62, 0.42],
+                16, ["case", ["get", "isSelected"], 0.76, 0.52],
+                18, ["case", ["get", "isSelected"], 0.9,  0.62],
+              ],
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              "icon-anchor": "center",
+            },
+          }, before);
+        });
 
         // Invisible 32 px hit area so cafés are easy to tap on mobile
         map.addLayer({
