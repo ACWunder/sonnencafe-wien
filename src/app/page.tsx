@@ -75,6 +75,40 @@ function isOpenNow(oh: string | undefined, date: Date): boolean | null {
   return result;
 }
 
+/** Returns formatted hours for today, e.g. "9–18h" or "9:30–22h", null if unavailable */
+function getTodayHours(oh: string | undefined, date: Date): string | null {
+  if (!oh) return null;
+  const s = oh.trim();
+  if (s === "24/7") return "0–24h";
+
+  const dow = date.getDay();
+
+  for (const rule of s.split(";")) {
+    const r = rule.trim();
+    if (!r) continue;
+    const m = r.match(/^([A-Za-z,\-]+)\s+(.+)$/);
+    if (!m) continue;
+    const days = ohExpandDays(m[1]);
+    if (!days.includes(dow)) continue;
+    const timeSpec = m[2].trim().toLowerCase();
+    if (timeSpec === "off") return null;
+
+    const fmt = (h: number, min: number) =>
+      min ? `${h}:${min.toString().padStart(2, "0")}` : `${h}`;
+
+    const ranges = timeSpec.split(",").map((range) => {
+      const parts = range.trim().split("-");
+      if (parts.length < 2) return null;
+      const [sh, sm] = parts[0].split(":").map(Number);
+      const [eh, em] = parts[1].split(":").map(Number);
+      return `${fmt(sh, sm || 0)}–${fmt(eh, em || 0)}h`;
+    }).filter(Boolean);
+
+    if (ranges.length > 0) return ranges.join(", ");
+  }
+  return null;
+}
+
 // ─── Fuzzy search ─────────────────────────────────────────────────────────────
 
 /** Phonetic normalisation: strips diacritics, maps common sound-alikes */
@@ -811,6 +845,7 @@ function SelectedCafeCard({
 
   const isSunny = mins !== null && mins !== undefined;
   const openStatus = isOpenNow(cafe.tags?.opening_hours, currentDate);
+  const todayHours = getTodayHours(cafe.tags?.opening_hours, currentDate);
   const mapsQuery = cafe.address
     ? [cafe.name, cafe.address, "Wien"].join(", ")
     : cafe.name;
@@ -868,7 +903,7 @@ function SelectedCafeCard({
                 className={`text-[8px] font-body font-semibold shrink-0 leading-none ${openStatus ? "" : "text-red-400"}`}
                 style={openStatus ? { color: "#00cd00" } : undefined}
               >
-                {openStatus ? "geöffnet" : "geschlossen"}
+                {openStatus ? "geöffnet" : "geschlossen"}{todayHours && ` · ${todayHours}`}
               </span>
             )}
           </div>
