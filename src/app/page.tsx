@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue, useTransition } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import { format } from "date-fns";
 import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } from "lucide-react";
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
@@ -202,19 +202,11 @@ export default function Home() {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Type filter ───────────────────────────────────────────────────────────────
-  // visualIncludeRestaurants: updates instantly → drives checkbox appearance only
-  // includeRestaurants: updates in a transition → drives actual filtering
-  const [visualIncludeRestaurants, setVisualIncludeRestaurants] = useState(false);
   const [includeRestaurants, setIncludeRestaurants] = useState(false);
 
   // ── District filter ──────────────────────────────────────────────────────────
   const [showFilter, setShowFilter] = useState(false);
-
-  // visualDistricts: updates instantly → drives checkbox appearance only
-  // filterDistricts: updates in a transition → drives sidebar + map (non-blocking)
   const [visualDistricts, setVisualDistricts] = useState<Set<string> | null>(null);
-  const [filterDistricts, setFilterDistricts] = useState<Set<string> | null>(null);
-  const [, startFilterTransition] = useTransition();
 
   const allDistricts = useMemo(() => {
     const set = new Set(cafes.map((c) => c.district ?? "Wien"));
@@ -225,37 +217,26 @@ export default function Home() {
     });
   }, [cafes]);
 
-  // All cafes in selected districts — passed to MapView so it pre-computes shadows
-  // for restaurants in the background even when the toggle is off.
-  const districtFilteredCafes = useMemo(() => {
-    if (!filterDistricts) return cafes;
-    return cafes.filter((c) => filterDistricts.has(c.district ?? "Wien"));
-  }, [cafes, filterDistricts]);
-
-  // IDs of cafes to actually show as markers (respects restaurant toggle)
+  // IDs of cafes to actually show as markers — instant, driven by visualDistricts + includeRestaurants
+  // MapView always receives ALL cafes so shadows are pre-computed; visibleCafeIds just controls markers
   const visibleCafeIds = useMemo(() => {
-    const visible = includeRestaurants
-      ? districtFilteredCafes
-      : districtFilteredCafes.filter((c) => !isRestaurantType(c.tags));
-    return new Set(visible.map((c) => c.id));
-  }, [districtFilteredCafes, includeRestaurants]);
+    let result = cafes;
+    if (visualDistricts) result = result.filter((c) => visualDistricts.has(c.district ?? "Wien"));
+    if (!includeRestaurants) result = result.filter((c) => !isRestaurantType(c.tags));
+    return new Set(result.map((c) => c.id));
+  }, [cafes, visualDistricts, includeRestaurants]);
 
   const toggleDistrict = useCallback((d: string) => {
-    const computeNext = (prev: Set<string> | null) => {
+    setVisualDistricts((prev) => {
       const current = prev ?? new Set(allDistricts);
       const next = new Set(current);
       if (next.has(d)) next.delete(d); else next.add(d);
       return next.size === allDistricts.length ? null : next;
-    };
-    // Instant: checkbox flips immediately
-    setVisualDistricts((prev) => computeNext(prev));
-    // Non-blocking: sidebar + map update without blocking the UI
-    startFilterTransition(() => setFilterDistricts((prev) => computeNext(prev)));
+    });
   }, [allDistricts]);
 
   const resetFilter = useCallback(() => {
     setVisualDistricts(null);
-    startFilterTransition(() => setFilterDistricts(null));
   }, []);
 
   const filterActive = visualDistricts !== null && visualDistricts.size < allDistricts.length;
@@ -317,7 +298,7 @@ export default function Home() {
     };
   }, [showFilter]);
 
-  const deferredCafesForMap = useDeferredValue(districtFilteredCafes);
+  const deferredCafesForMap = useDeferredValue(cafes);
 
   const currentDate = useMemo(() => {
     const [y, mo, d] = timeState.date.split("-").map(Number);
@@ -367,7 +348,7 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = search.trim();
-    const listCafes = districtFilteredCafes.filter((c) => visibleCafeIds.has(c.id));
+    const listCafes = cafes.filter((c) => visibleCafeIds.has(c.id));
     if (!q) {
       return [...listCafes].sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
     }
@@ -385,7 +366,7 @@ export default function Home() {
     );
 
     return scored.map(({ cafe }) => cafe);
-  }, [districtFilteredCafes, visibleCafeIds, search, sunRemaining]);
+  }, [cafes, visibleCafeIds, search, sunRemaining]);
 
   const currentMinute = (() => {
     const [h, m] = timeState.time.split(":").map(Number);
@@ -725,9 +706,7 @@ export default function Home() {
                     onClick={() => {
                       const allChecked = !visualDistricts || visualDistricts.size === allDistricts.length;
                       if (allChecked) {
-                        const empty = new Set<string>();
-                        setVisualDistricts(empty);
-                        startFilterTransition(() => setFilterDistricts(empty));
+                        setVisualDistricts(new Set<string>());
                       } else {
                         resetFilter();
                       }
@@ -772,19 +751,18 @@ export default function Home() {
                   </div>
                   <label
                     onClick={() => {
-                      setVisualIncludeRestaurants((v) => !v);
-                      startFilterTransition(() => setIncludeRestaurants((v) => !v));
+                      setIncludeRestaurants((v) => !v);
                     }}
                     className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
                   >
                     <span className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 transition-all duration-150 ${
-                      visualIncludeRestaurants ? "bg-amber-400 border-amber-400" : "bg-white border-zinc-200"
+                      includeRestaurants ? "bg-amber-400 border-amber-400" : "bg-white border-zinc-200"
                     }`}>
                       <svg
                         width="9" height="7" viewBox="0 0 9 7" fill="none"
                         style={{
-                          opacity: visualIncludeRestaurants ? 1 : 0,
-                          transform: visualIncludeRestaurants ? "scale(1)" : "scale(0.5)",
+                          opacity: includeRestaurants ? 1 : 0,
+                          transform: includeRestaurants ? "scale(1)" : "scale(0.5)",
                           transition: "opacity 0.15s ease, transform 0.15s ease",
                         }}
                       >
