@@ -896,10 +896,12 @@ export function MapView({
             </svg>
           )}
         </button>
-        <SunCompass
-          timeState={timeState}
-          onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
-        />
+        <div style={{ marginRight: "20px" }}>
+          <SunCompass
+            timeState={timeState}
+            onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
+          />
+        </div>
       </div>
     </div>
   );
