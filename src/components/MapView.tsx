@@ -849,90 +849,54 @@ export function MapView({
         </div>
       )}
 
-      {/* Locate button */}
-      <button
-        onClick={() => {
-          if (!mapInstanceRef.current) return;
-          setLocating(true);
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setLocating(false);
-              import("maplibre-gl").then((maplibregl) => {
-                const map = mapInstanceRef.current;
-                if (!map) return;
-                const { latitude: lat, longitude: lng } = pos.coords;
-
-                locationMarkerRef.current?.remove();
-
-                const el = document.createElement("div");
-                el.style.cssText = [
-                  "width:18px;height:18px;border-radius:50%;",
-                  "background:#3b82f6;border:2.5px solid white;",
-                  "box-shadow:0 0 0 4px rgba(59,130,246,0.25);",
-                  "animation:locationPulse 2s ease-in-out infinite;",
-                ].join("");
-
-                locationMarkerRef.current = new maplibregl.Marker({ element: el })
-                  .setLngLat([lng, lat])
-                  .addTo(map);
-
-                map.easeTo({ center: [lng, lat], duration: 600 });
-              });
-            },
-            () => setLocating(false),
-            { enableHighAccuracy: true, timeout: 8000 },
-          );
-        }}
-        className="absolute top-[6.25rem] left-3 z-[500] w-9 h-9 bg-white/90 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center active:scale-95 transition-all"
-        title="Meinen Standort anzeigen"
-      >
-        {locating ? (
-          <div className="w-4 h-4 border-[1.5px] border-blue-400 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-            <circle cx="12" cy="12" r="8" strokeOpacity="0.3" />
-          </svg>
-        )}
-      </button>
-
-      {/* Legend + compass stacked bottom-left */}
-      <div className="absolute z-[500] flex flex-col gap-2 items-start" style={{ bottom: "24px", left: "12px" }}>
+      {/* Compass + locate button stacked bottom-right */}
+      <div className="absolute z-[500] flex flex-col gap-3 items-center" style={{ bottom: "24px", right: "16px" }}>
         <SunCompass
           timeState={timeState}
           onNorth={() => mapInstanceRef.current?.easeTo({ bearing: 0, duration: 600 })}
         />
-        <Legend />
+        <button
+          onClick={() => {
+            if (!mapInstanceRef.current) return;
+            setLocating(true);
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                setLocating(false);
+                import("maplibre-gl").then((maplibregl) => {
+                  const map = mapInstanceRef.current;
+                  if (!map) return;
+                  const { latitude: lat, longitude: lng } = pos.coords;
+                  locationMarkerRef.current?.remove();
+                  const el = document.createElement("div");
+                  el.style.cssText = [
+                    "width:18px;height:18px;border-radius:50%;",
+                    "background:#3b82f6;border:2.5px solid white;",
+                    "box-shadow:0 0 0 4px rgba(59,130,246,0.25);",
+                    "animation:locationPulse 2s ease-in-out infinite;",
+                  ].join("");
+                  locationMarkerRef.current = new maplibregl.Marker({ element: el })
+                    .setLngLat([lng, lat])
+                    .addTo(map);
+                  map.easeTo({ center: [lng, lat], duration: 600 });
+                });
+              },
+              () => setLocating(false),
+              { enableHighAccuracy: true, timeout: 8000 },
+            );
+          }}
+          className="w-[56px] h-[56px] bg-white rounded-full shadow-xl shadow-zinc-300/40 border border-zinc-100 flex items-center justify-center active:scale-95 transition-all"
+          title="Meinen Standort anzeigen"
+        >
+          {locating ? (
+            <div className="w-5 h-5 border-2 border-[#4285f4] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2.5L3 21.5l9-4 9 4z" fill="#4285f4"/>
+            </svg>
+          )}
+        </button>
       </div>
       <SunInfoOverlay timeState={timeState} />
-    </div>
-  );
-}
-
-// ─── legend ───────────────────────────────────────────────────────────────────
-function Legend() {
-  return (
-    <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/40 p-3">
-      <div className="text-zinc-400 font-body uppercase tracking-widest mb-2" style={{ fontSize: "8px", fontWeight: 700, letterSpacing: "0.1em" }}>
-        Legende
-      </div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#fde68a", border: "1.5px solid #f59e0b" }} />
-        <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Sonnig</span>
-      </div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#334155", opacity: 0.65 }} />
-        <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Schatten</span>
-      </div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#f0ebe3", border: "1.5px solid #ddd6cc" }} />
-        <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Gebäude</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div style={{ width: 12, height: 12, borderRadius: 4, background: "#aad3a0" }} />
-        <span className="font-body text-zinc-600" style={{ fontSize: "11px" }}>Grünfläche</span>
-      </div>
     </div>
   );
 }
@@ -943,9 +907,9 @@ function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: ()
   const pos  = getSunPosition(NEUBAU_CENTER[0], NEUBAU_CENTER[1], date);
   const isUp = pos.altitudeDeg > 0;
 
-  const size         = 52;
+  const size         = 72;
   const r            = size / 2;
-  const pad          = 10;
+  const pad          = 13;
   const innerR       = r - pad;
   const distFraction = isUp ? Math.max(0, 1 - pos.altitudeDeg / 90) : 1.0;
   const azRad        = (pos.azimuthDeg * Math.PI) / 180;

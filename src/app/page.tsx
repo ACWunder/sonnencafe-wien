@@ -781,7 +781,7 @@ export default function Home() {
           {selectedCafe && (
             <div
               className="md:hidden fixed z-[9999] mobile-cafe-card-enter"
-              style={{ bottom: "12px", right: 0, width: "260px" }}
+              style={{ bottom: "12px", left: 0, width: "260px" }}
               onTouchStart={(e) => { cardDragStartY.current = e.touches[0].clientY; }}
               onTouchEnd={(e) => {
                 const dy = e.changedTouches[0].clientY - cardDragStartY.current;
