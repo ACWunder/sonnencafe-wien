@@ -205,6 +205,43 @@ function polygonToGeoJSON(polygon: [number, number][]): number[][] {
   return ring;
 }
 
+// ─── marker images ────────────────────────────────────────────────────────────
+
+function registerMarkerImages(map: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  function mk(w: number, h: number, fn: (ctx: CanvasRenderingContext2D) => void): ImageData {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d")!;
+    fn(ctx);
+    return ctx.getImageData(0, 0, w, h);
+  }
+
+  // ☀️ emoji — browser renders Apple emoji on Apple devices
+  // 80×80 canvas @pixelRatio:2 → displays as 40px at icon-size 1.0
+  map.addImage("cafe-sunny", mk(80, 80, (ctx) => {
+    ctx.font = "60px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("☀️", 40, 43);
+  }), { pixelRatio: 2 });
+
+  // Shade dot — slightly larger than old circle (was r≈4px display, now r≈7px)
+  // 56×56 canvas @pixelRatio:2 → displays as 28px at icon-size 1.0
+  map.addImage("cafe-shade", mk(56, 56, (ctx) => {
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 1.5;
+    ctx.beginPath();
+    ctx.arc(28, 28, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#374151";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }), { pixelRatio: 2 });
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
@@ -438,6 +475,7 @@ export function MapView({
       map.on("load", () => {
         if (!mounted) return;
         mapReadyRef.current = true;
+        registerMarkerImages(map);
 
         // Find the first symbol layer in the base style (road/place labels, icons).
         // All our custom layers are inserted before it so labels always render on top.
@@ -553,21 +591,21 @@ export function MapView({
           paint: { "line-color": "#94a3b8", "line-width": 0.8 },
         }, before);
 
-        // Café dots — color + size driven by GeoJSON properties
+        // Café markers — emoji for sunny, dot for shade
         map.addLayer({
           id: "cafes",
-          type: "circle",
+          type: "symbol",
           source: "cafes-source",
-          paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              13, ["case", ["get", "isSelected"], 6, 3],
-              16, ["case", ["get", "isSelected"], 7, 4],
-              17, ["case", ["get", "isSelected"], 8, 5],
+          layout: {
+            "icon-image": ["case", ["get", "inShadow"], "cafe-shade", "cafe-sunny"],
+            "icon-size": [
+              "*",
+              ["interpolate", ["linear"], ["zoom"], 12, 0.38, 14, 0.52, 16, 0.65, 18, 0.8],
+              ["case", ["get", "isSelected"], 1.55, 1.0],
             ],
-            "circle-color": ["case", ["get", "inShadow"], "#374151", "#ea580c"],
-            "circle-stroke-width": ["case", ["get", "isSelected"], 2.5, 0],
-            "circle-stroke-color": "#ffffff",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-anchor": "center",
           },
         }, before);
 
