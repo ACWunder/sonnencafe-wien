@@ -410,6 +410,12 @@ export function MapView({
         onSunRemainingRef.current(remaining);
         onSunTimelineRef.current(timelines);
         // Sync dot colors with the accurate calcSunRemaining result
+        // Sync shadow cache with accurate results so fast-path (selection change)
+        // doesn't overwrite these correct values with stale quick-check data.
+        for (const cafe of allCafes) {
+          shadowCacheRef.current.set(cafe.id, remaining[cafe.id] === null);
+        }
+
         const source = mapInstanceRef.current?.getSource("cafes-source");
         if (source && mapReadyRef.current) {
           const selId = selectedCafeRef.current?.id ?? null;
