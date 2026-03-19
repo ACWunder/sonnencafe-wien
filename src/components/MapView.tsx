@@ -472,7 +472,7 @@ export function MapView({
           source.setData({
             type: "FeatureCollection",
             features: buildings
-              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 200)
               .map((b) => ({
                 type: "Feature",
                 geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
