@@ -308,7 +308,7 @@ export function MapView({
   const visibleCafeIdsRef    = useRef<Set<string> | undefined>(visibleCafeIds);
   visibleCafeIdsRef.current  = visibleCafeIds;
 
-  const [fetching,  setFetching]  = useState(false);
+  const [, setFetching]  = useState(false);
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -838,15 +838,8 @@ export function MapView({
   }, [cafes]);
 
   // ── redraw dots when selection changes ────────────────────────────────────
-  // When deselecting, delay the source update so the cafe card leave animation
-  // finishes first — otherwise the marker jumps to small while the card is
-  // still visible.
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
-    if (selectedCafe === null) {
-      const id = window.setTimeout(() => updateCafesSource(false), 230);
-      return () => window.clearTimeout(id);
-    }
     updateCafesSource(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCafe]);
@@ -887,12 +880,6 @@ export function MapView({
     <div className="w-full h-full relative">
       <div ref={mapRef} className="w-full h-full" />
 
-      {fetching && (
-        <div className="absolute top-3 left-14 z-[1000] bg-white/80 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-lg shadow-zinc-200/30 px-3.5 py-2 flex items-center gap-2 font-body text-zinc-500" style={{ fontSize: "12px" }}>
-          <div className="w-3 h-3 border-[1.5px] border-amber-400 border-t-transparent rounded-full animate-spin" />
-          Gebäude laden…
-        </div>
-      )}
 
       {/* Compass + locate button stacked — bottom right */}
       <div className="absolute z-[500] flex flex-col gap-3 items-end" style={{ bottom: "24px", right: "16px" }}>

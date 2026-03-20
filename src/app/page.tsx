@@ -209,14 +209,15 @@ export default function Home() {
     const now = new Date();
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
-  const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(false);
+  const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
-  const [mobileCafeClosing, setMobileCafeClosing] = useState(false);
+  const [displayCafe, setDisplayCafe] = useState<Cafe | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const [search, setSearch] = useState("");
   const [sunRemaining, setSunRemaining] = useState<Record<string, number | null>>({});
   const [sunTimelines, setSunTimelines] = useState<SunTimelineData>({});
@@ -273,6 +274,19 @@ export default function Home() {
   }, []);
 
   const filterActive = visualDistricts !== null && visualDistricts.size < allDistricts.length;
+
+  // Keep displayCafe in sync: update immediately on new selection,
+  // but delay clearing so the card can animate out while the marker
+  // already starts shrinking (selectedCafe=null fires immediately).
+  useEffect(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    if (selectedCafe !== null) {
+      setDisplayCafe(selectedCafe);
+    } else {
+      closeTimerRef.current = window.setTimeout(() => setDisplayCafe(null), 240);
+    }
+    return () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); };
+  }, [selectedCafe]);
 
   // Tap-to-close filter panel: close on short tap on map, not on drag/zoom
   useEffect(() => {
@@ -660,14 +674,15 @@ export default function Home() {
 
         {/* Desktop sidebar — hidden on mobile */}
         <aside className="hidden md:flex w-80 shrink-0 flex-col bg-white overflow-hidden" style={{ boxShadow: '1px 0 0 0 #f4f4f5, 4px 0 16px 0 rgba(0,0,0,0.03)' }}>
-          {selectedCafe && (
+          {displayCafe && (
             <SelectedCafeCard
-              cafe={selectedCafe}
-              mins={sunRemaining[selectedCafe.id]}
-              timeline={sunTimelines[selectedCafe.id]}
+              cafe={displayCafe}
+              mins={sunRemaining[displayCafe.id]}
+              timeline={sunTimelines[displayCafe.id]}
               currentMinute={currentMinute}
               currentDate={currentDate}
               onClose={() => setSelectedCafe(null)}
+              isClosingOverride={selectedCafe === null}
             />
           )}
           <div className="px-3 pt-3 pb-2 shrink-0">
@@ -774,7 +789,7 @@ export default function Home() {
           )}
 
           {isCafeSymbolsUpdating && (
-            <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
+            <div className="pointer-events-none absolute inset-0 z-[490] flex items-center justify-center">
               <svg className="animate-spin h-16 w-16" viewBox="0 0 64 64" fill="none">
                 <defs>
                   <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -901,29 +916,24 @@ export default function Home() {
           )}
 
           {/* Mobile: floating cafe card — fixed, right-aligned, same bottom as legend */}
-          {selectedCafe && (
+          {displayCafe && (
             <div
-              className={`md:hidden fixed z-[9999] ${mobileCafeClosing ? "mobile-cafe-card-leave" : "mobile-cafe-card-enter"}`}
+              className={`md:hidden fixed z-[9999] ${selectedCafe === null ? "mobile-cafe-card-leave" : "mobile-cafe-card-enter"}`}
               style={{ bottom: "12px", left: "max(0px, calc((100vw - 108px - 260px) / 2))", width: "260px" }}
               onTouchStart={(e) => { cardDragStartY.current = e.touches[0].clientY; }}
               onTouchEnd={(e) => {
                 const dy = e.changedTouches[0].clientY - cardDragStartY.current;
-                if (dy > 60) {
-                  setMobileCafeClosing(true);
-                  setTimeout(() => { setSelectedCafe(null); setMobileCafeClosing(false); }, 220);
-                }
+                if (dy > 60) setSelectedCafe(null);
               }}
             >
               <SelectedCafeCard
-                cafe={selectedCafe}
-                mins={sunRemaining[selectedCafe.id]}
-                timeline={sunTimelines[selectedCafe.id]}
+                cafe={displayCafe}
+                mins={sunRemaining[displayCafe.id]}
+                timeline={sunTimelines[displayCafe.id]}
                 currentMinute={currentMinute}
                 currentDate={currentDate}
-                onClose={() => {
-                  setMobileCafeClosing(true);
-                  setTimeout(() => { setSelectedCafe(null); setMobileCafeClosing(false); }, 220);
-                }}
+                onClose={() => setSelectedCafe(null)}
+                isClosingOverride={selectedCafe === null}
               />
             </div>
           )}
@@ -942,6 +952,7 @@ function SelectedCafeCard({
   currentMinute,
   currentDate,
   onClose,
+  isClosingOverride,
 }: {
   cafe: Cafe;
   mins: number | null | undefined;
@@ -949,15 +960,16 @@ function SelectedCafeCard({
   currentMinute: number;
   currentDate: Date;
   onClose: () => void;
+  isClosingOverride?: boolean;
 }) {
-  const [isClosing, setIsClosing] = useState(false);
+  const [isClosingInternal, setIsClosingInternal] = useState(false);
+  const isClosing = isClosingOverride ?? isClosingInternal;
 
-  // Cancel close animation when switching to a different cafe
-  useEffect(() => { setIsClosing(false); }, [cafe.id]);
+  // Reset internal state when switching to a different cafe
+  useEffect(() => { setIsClosingInternal(false); }, [cafe.id]);
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(onClose, 170);
+    onClose(); // fires immediately so marker starts shrinking at the same time
   };
 
   const isSunny = mins !== null && mins !== undefined;
