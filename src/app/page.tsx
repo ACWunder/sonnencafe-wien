@@ -216,6 +216,7 @@ export default function Home() {
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
+  const [mobileCafeClosing, setMobileCafeClosing] = useState(false);
   const [search, setSearch] = useState("");
   const [sunRemaining, setSunRemaining] = useState<Record<string, number | null>>({});
   const [sunTimelines, setSunTimelines] = useState<SunTimelineData>({});
@@ -902,12 +903,15 @@ export default function Home() {
           {/* Mobile: floating cafe card — fixed, right-aligned, same bottom as legend */}
           {selectedCafe && (
             <div
-              className="md:hidden fixed z-[9999] mobile-cafe-card-enter"
+              className={`md:hidden fixed z-[9999] ${mobileCafeClosing ? "mobile-cafe-card-leave" : "mobile-cafe-card-enter"}`}
               style={{ bottom: "12px", left: "max(0px, calc((100vw - 108px - 260px) / 2))", width: "260px" }}
               onTouchStart={(e) => { cardDragStartY.current = e.touches[0].clientY; }}
               onTouchEnd={(e) => {
                 const dy = e.changedTouches[0].clientY - cardDragStartY.current;
-                if (dy > 60) setSelectedCafe(null);
+                if (dy > 60) {
+                  setMobileCafeClosing(true);
+                  setTimeout(() => { setSelectedCafe(null); setMobileCafeClosing(false); }, 220);
+                }
               }}
             >
               <SelectedCafeCard
@@ -916,7 +920,10 @@ export default function Home() {
                 timeline={sunTimelines[selectedCafe.id]}
                 currentMinute={currentMinute}
                 currentDate={currentDate}
-                onClose={() => setSelectedCafe(null)}
+                onClose={() => {
+                  setMobileCafeClosing(true);
+                  setTimeout(() => { setSelectedCafe(null); setMobileCafeClosing(false); }, 220);
+                }}
               />
             </div>
           )}

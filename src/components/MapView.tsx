@@ -725,6 +725,8 @@ export function MapView({
             "circle-color": "#374151",
             "circle-stroke-width": ["case", ["get", "isSelected"], 2.5, 1.5],
             "circle-stroke-color": "#ffffff",
+            "circle-radius-transition": { duration: 220, delay: 0 },
+            "circle-stroke-width-transition": { duration: 220, delay: 0 },
           },
         }, before);
 
@@ -836,8 +838,15 @@ export function MapView({
   }, [cafes]);
 
   // ── redraw dots when selection changes ────────────────────────────────────
+  // When deselecting, delay the source update so the cafe card leave animation
+  // finishes first — otherwise the marker jumps to small while the card is
+  // still visible.
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
+    if (selectedCafe === null) {
+      const id = window.setTimeout(() => updateCafesSource(false), 230);
+      return () => window.clearTimeout(id);
+    }
     updateCafesSource(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCafe]);

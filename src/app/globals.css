@@ -140,12 +140,12 @@ input[type="range"].sun-time-slider::-moz-range-thumb {
 }
 
 @keyframes cafeCardLeave {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(6px) scale(0.97); }
 }
 
 .cafe-card-leave {
-  animation: cafeCardLeave 0.15s ease-out forwards;
+  animation: cafeCardLeave 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
   pointer-events: none;
 }
 
@@ -171,13 +171,21 @@ aside ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Mobile cafe card slide-up */
+/* Mobile cafe card slide-up / slide-down */
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(20px); }
+}
 .mobile-cafe-card-enter {
   animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mobile-cafe-card-leave {
+  animation: slideDown 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
 }
 
 /* Mobile bottom sheet */
