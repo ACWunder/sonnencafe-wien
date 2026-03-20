@@ -780,7 +780,7 @@ export default function Home() {
           <button
             onClick={() => { setSidebarOpen(true); setSelectedCafe(null); }}
             className={`md:hidden absolute left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 ${
-              hasTimeSlider ? "top-[64px]" : "top-3"
+              hasTimeSlider ? "top-[67px]" : "top-3"
             }`}
           >
             <Menu className="w-5 h-5" />
@@ -791,7 +791,7 @@ export default function Home() {
             ref={filterButtonRef}
             onClick={() => { setShowFilter((v) => !v); setSelectedCafe(null); }}
             className={`absolute left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center ${
-              hasTimeSlider ? "top-[132px]" : "top-20"
+              hasTimeSlider ? "top-[135px]" : "top-20"
             } ${
               filterActive
                 ? "bg-amber-400 border-amber-300 text-white"
@@ -805,7 +805,7 @@ export default function Home() {
           {/* Filter panel */}
           {showFilter && (
             <div ref={filterPanelRef} className={`absolute left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden ${
-              hasTimeSlider ? "top-[200px]" : "top-36"
+              hasTimeSlider ? "top-[203px]" : "top-36"
             }`}>
                 <div className="flex items-center justify-between pl-3.5 pr-3.5 pt-2.5 pb-2">
                   <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Bezirke</span>
