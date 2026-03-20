@@ -57,12 +57,12 @@ const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
 // the union of all shadow polygons — overlapping areas are filled only once
 // so opacity never accumulates even where building shadows stack.
 //
-// Zoom-15 resolution (half of zoom-16 in each dimension = 4× fewer pixels).
-// Shadow edges are smooth at typical usage zoom levels (14–16) via bilinear
-// resampling. The 4× size reduction makes worker renders ~4× faster.
-const _ZOOM15_PX  = (Math.pow(2, 15) * 256) / 360; // pixels per degree at zoom 15
-const SHADOW_W    = Math.ceil((DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west) * _ZOOM15_PX); // ~983
-const SHADOW_H    = Math.ceil((DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * _ZOOM15_PX); // ~1280
+// Zoom-16 resolution so the canvas matches 1:1 at the most common viewing zoom,
+// giving crisp 1-pixel shadow edges. Combined with raster-resampling:"nearest"
+// on the raster layer this eliminates all bilinear blur.
+const _ZOOM16_PX  = (Math.pow(2, 16) * 256) / 360; // pixels per degree at zoom 16
+const SHADOW_W    = Math.ceil((DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west) * _ZOOM16_PX); // ~1966
+const SHADOW_H    = Math.ceil((DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * _ZOOM16_PX); // ~2560
 // MapLibre image-source corner order: top-left, top-right, bottom-right, bottom-left
 const SHADOW_COORDS: [[number,number],[number,number],[number,number],[number,number]] = [
   [DISTRICT_BOUNDS.west, DISTRICT_BOUNDS.north],
@@ -729,7 +729,11 @@ export function MapView({
           id: "shadows",
           type: "raster",
           source: "shadow-source",
-          paint: { "raster-opacity": 0.55 },
+          paint: {
+            "raster-opacity": 0.55,
+            // nearest-neighbor: no bilinear blur — shadow edges stay pixel-crisp
+            "raster-resampling": "nearest",
+          },
         }, before);
 
         map.addLayer({
