@@ -875,7 +875,11 @@ export function MapView({
   // ── redraw when café list changes ─────────────────────────────────────────
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
-    updateCafesSource(true);
+    // Only compute sun data if buildings are already loaded. If not,
+    // loadStaticBuildings() will call updateCafesSource(true) once ready,
+    // preventing onSunDataSettled from firing before we have real building data.
+    const buildingsReady = buildingCacheRef.current.size > 0;
+    updateCafesSource(buildingsReady);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafes]);
 
