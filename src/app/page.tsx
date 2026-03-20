@@ -210,6 +210,17 @@ export default function Home() {
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
   const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
+  const sunDataSettledRef = useRef(false);
+  const emojiReadyRef = useRef(false);
+  const trySettleSpinner = useCallback(() => {
+    if (sunDataSettledRef.current && emojiReadyRef.current) {
+      setIsCafeSymbolsUpdating(false);
+    }
+  }, []);
+  const showSpinner = useCallback(() => {
+    sunDataSettledRef.current = false;
+    setIsCafeSymbolsUpdating(true);
+  }, []);
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
@@ -259,7 +270,7 @@ export default function Home() {
   const deferredVisibleCafeIds = useDeferredValue(visibleCafeIds);
 
   const toggleDistrict = useCallback((d: string) => {
-    setIsCafeSymbolsUpdating(true);
+    showSpinner();
     setVisualDistricts((prev) => {
       const current = prev ?? new Set(allDistricts);
       const next = new Set(current);
@@ -269,7 +280,7 @@ export default function Home() {
   }, [allDistricts]);
 
   const resetFilter = useCallback(() => {
-    setIsCafeSymbolsUpdating(true);
+    showSpinner();
     setVisualDistricts(null);
   }, []);
 
@@ -411,7 +422,7 @@ export default function Home() {
     if (sunriseTime === null || sunsetTime === null) return;
     const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
     const nextTime = minuteToTime(nextMinute);
-    setIsCafeSymbolsUpdating(true);
+    showSpinner();
     setSelectedTime(nextMinute);
     setTimeState((prev) => (
       prev.time === nextTime ? prev : { ...prev, time: nextTime }
@@ -452,7 +463,7 @@ export default function Home() {
     let filterChanged = false;
     // If the cafe's district is currently filtered out, add it
     if (visualDistricts !== null && !visualDistricts.has(cafe.district ?? "Wien")) {
-      setIsCafeSymbolsUpdating(true);
+      showSpinner();
       setVisualDistricts((prev) => {
         const next = new Set(prev ?? allDistricts);
         next.add(cafe.district ?? "Wien");
@@ -462,7 +473,7 @@ export default function Home() {
     }
     // If it's a restaurant and restaurants are hidden, enable them
     if (!includeRestaurants && isRestaurantType(cafe.tags)) {
-      if (!filterChanged) setIsCafeSymbolsUpdating(true);
+      if (!filterChanged) showSpinner();
       setIncludeRestaurants(true);
     }
   }, [visualDistricts, allDistricts, includeRestaurants]);
@@ -499,7 +510,7 @@ export default function Home() {
           type="date"
           value={timeState.date}
           onChange={(e) => {
-            setIsCafeSymbolsUpdating(true);
+            showSpinner();
             setTimeState((s) => ({ ...s, date: e.target.value }));
           }}
           className="text-[11px] font-body text-zinc-600 border border-zinc-200 rounded-[8px] px-2 py-1 bg-zinc-50/80 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all cursor-pointer min-w-0 shrink"
@@ -511,7 +522,7 @@ export default function Home() {
           value={timeState.time}
           onChange={(e) => {
             if (hasTimeSlider) return;
-            setIsCafeSymbolsUpdating(true);
+            showSpinner();
             setTimeState((s) => ({ ...s, time: e.target.value }));
           }}
           readOnly={hasTimeSlider}
@@ -525,7 +536,7 @@ export default function Home() {
         <button
           onClick={() => {
             const now = new Date();
-            setIsCafeSymbolsUpdating(true);
+            showSpinner();
             setTimeState({ date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") });
           }}
           className="flex items-center gap-1 bg-gradient-to-br from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-body font-semibold rounded-[8px] transition-all shadow-sm shadow-amber-200/60 active:scale-95 shrink-0 px-2 py-1"
@@ -788,7 +799,8 @@ export default function Home() {
             onCafeSelect={handleCafeSelect}
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
-            onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
+            onSunDataSettled={() => { sunDataSettledRef.current = true; trySettleSpinner(); }}
+            onEmojiReady={() => { emojiReadyRef.current = true; trySettleSpinner(); }}
           />
 
           {hasTimeSlider && (
@@ -874,7 +886,7 @@ export default function Home() {
                     onClick={() => {
                       const allChecked = !visualDistricts || visualDistricts.size === allDistricts.length;
                       if (allChecked) {
-                        setIsCafeSymbolsUpdating(true);
+                        showSpinner();
                         setVisualDistricts(new Set<string>());
                       } else {
                         resetFilter();
@@ -920,7 +932,7 @@ export default function Home() {
                   </div>
                   <label
                     onClick={() => {
-                      setIsCafeSymbolsUpdating(true);
+                      showSpinner();
                       setIncludeRestaurants((v) => !v);
                     }}
                     className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
