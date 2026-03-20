@@ -731,8 +731,10 @@ export function MapView({
           source: "shadow-source",
           paint: {
             "raster-opacity": 0.55,
-            // nearest-neighbor: no bilinear blur — shadow edges stay pixel-crisp
-            "raster-resampling": "nearest",
+            // "linear" (default) preserves the canvas's own sub-pixel anti-aliasing
+            // exactly at zoom 16 (1:1 canvas-to-screen) — smooth edges, no staircase.
+            // "nearest" was crisp but showed pixel steps on diagonal edges.
+            "raster-resampling": "linear",
           },
         }, before);
 
