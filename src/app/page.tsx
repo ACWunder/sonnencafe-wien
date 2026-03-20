@@ -772,7 +772,21 @@ export default function Home() {
 
           {isCafeSymbolsUpdating && (
             <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
-              <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-amber-200/90 border-t-amber-400" />
+              <svg className="animate-spin h-12 w-12" viewBox="0 0 48 48" fill="none">
+                <defs>
+                  <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.85" />
+                    <stop offset="100%" stopColor="#ea580c" stopOpacity="0.85" />
+                  </linearGradient>
+                </defs>
+                <circle
+                  cx="24" cy="24" r="19"
+                  stroke="url(#spinner-gradient)"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray="88 31"
+                />
+              </svg>
             </div>
           )}
 
@@ -780,7 +794,7 @@ export default function Home() {
           <button
             onClick={() => { setSidebarOpen(true); setSelectedCafe(null); }}
             className={`md:hidden absolute left-3 z-[500] w-[56px] h-[56px] bg-white/90 backdrop-blur-xl rounded-full border border-zinc-100 shadow-lg shadow-zinc-200/40 flex items-center justify-center text-zinc-500 ${
-              hasTimeSlider ? "top-[67px]" : "top-3"
+              hasTimeSlider ? "top-[72px]" : "top-3"
             }`}
           >
             <Menu className="w-5 h-5" />
@@ -791,7 +805,7 @@ export default function Home() {
             ref={filterButtonRef}
             onClick={() => { setShowFilter((v) => !v); setSelectedCafe(null); }}
             className={`absolute left-3 z-[500] w-[56px] h-[56px] backdrop-blur-xl rounded-full border shadow-lg shadow-zinc-200/40 flex items-center justify-center ${
-              hasTimeSlider ? "top-[135px]" : "top-20"
+              hasTimeSlider ? "top-[140px]" : "top-20"
             } ${
               filterActive
                 ? "bg-amber-400 border-amber-300 text-white"
@@ -805,7 +819,7 @@ export default function Home() {
           {/* Filter panel */}
           {showFilter && (
             <div ref={filterPanelRef} className={`absolute left-3 z-[502] w-52 bg-white/95 backdrop-blur-xl rounded-2xl border border-zinc-100 shadow-xl shadow-zinc-200/50 overflow-hidden ${
-              hasTimeSlider ? "top-[203px]" : "top-36"
+              hasTimeSlider ? "top-[208px]" : "top-36"
             }`}>
                 <div className="flex items-center justify-between pl-3.5 pr-3.5 pt-2.5 pb-2">
                   <span className="text-[10px] font-body font-bold uppercase tracking-widest text-zinc-400">Bezirke</span>
