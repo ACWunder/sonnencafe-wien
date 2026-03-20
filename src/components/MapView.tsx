@@ -72,6 +72,10 @@ const SHADOW_COORDS: [[number,number],[number,number],[number,number],[number,nu
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
+export interface MapViewShadowHandle {
+  updateShadow: (ts: TimeState) => void;
+}
+
 interface MapViewProps {
   timeState: TimeState;
   cafes: Cafe[];
@@ -82,6 +86,9 @@ interface MapViewProps {
   onSunTimeline: (data: SunTimelineData) => void;
   onSunDataSettled?: () => void;
   onEmojiReady?: () => void;
+  // Ref populated by MapView so callers can trigger shadow updates without
+  // going through React state (removes one full render-cycle of latency).
+  shadowHandleRef?: React.MutableRefObject<MapViewShadowHandle | null>;
   // Optional: subset of cafe IDs to show markers for (undefined = show all)
   visibleCafeIds?: Set<string>;
 }
@@ -268,7 +275,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, onEmojiReady, visibleCafeIds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, onEmojiReady, shadowHandleRef, visibleCafeIds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,6 +319,19 @@ export function MapView({
   visibleCafeIdsRef.current  = visibleCafeIds;
 
   const [, setFetching]  = useState(false);
+
+  // Internal ref always pointing to the latest shadow-update closure.
+  // Populated each render (functions are hoisted so updateShadowSource is
+  // already in scope). Exposed via shadowHandleRef so callers can bypass
+  // the React re-render cycle for instant slider response.
+  const shadowUpdateFnRef = useRef<((ts: TimeState) => void) | null>(null);
+  shadowUpdateFnRef.current = (ts: TimeState) => {
+    const all = Array.from(buildingCacheRef.current.values());
+    if (all.length > 0) updateShadowSource(all, ts);
+  };
+  if (shadowHandleRef) {
+    shadowHandleRef.current = { updateShadow: shadowUpdateFnRef.current };
+  }
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -731,6 +751,9 @@ export function MapView({
           type: "circle",
           source: "cafes-source",
           filter: ["==", ["get", "inShadow"], true],
+          layout: {
+            "circle-sort-key": ["case", ["get", "isSelected"], 1, 0],
+          },
           paint: {
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
@@ -767,6 +790,7 @@ export function MapView({
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               "icon-anchor": "center",
+              "symbol-sort-key": ["case", ["get", "isSelected"], 1, 0],
             },
           }, before);
         });

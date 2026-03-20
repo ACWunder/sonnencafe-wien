@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } f
 import { format } from "date-fns";
 import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } from "lucide-react";
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
-import { MapView } from "@/components/MapView";
+import { MapView, type MapViewShadowHandle } from "@/components/MapView";
 import { InstallBanner } from "@/components/InstallBanner";
 import { isRestaurantType } from "@/lib/overpass";
 import { DEFAULT_SUN_LOCATION } from "@/lib/mapConfig";
@@ -210,6 +210,8 @@ export default function Home() {
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
   const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
+  const timeStateRef = useRef(timeState);
+  timeStateRef.current = timeState;
   const sunDataSettledRef = useRef(false);
   const emojiReadyRef = useRef(false);
   const trySettleSpinner = useCallback(() => {
@@ -224,6 +226,9 @@ export default function Home() {
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
+
+  // Imperative handle to trigger shadow updates without going through React state.
+  const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -418,6 +423,16 @@ export default function Home() {
     setSelectedTime((prev) => (prev === currentMinute ? prev : currentMinute));
   }, [timeState.date, sunLocation, timeState.time]);
 
+  // Directly triggers the shadow worker without going through React state.
+  // Called on every slider pixel move for instant visual feedback.
+  const handleSliderShadow = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextTime = minuteToTime(clampMinute(minute, sunriseTime, sunsetTime));
+    shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
+  }, [sunriseTime, sunsetTime]);
+
+  // React state update — triggers sun data recompute, time display, etc.
+  // Runs on every slider change alongside handleSliderShadow.
   const handleSliderTimeChange = useCallback((minute: number) => {
     if (sunriseTime === null || sunsetTime === null) return;
     const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
@@ -799,6 +814,7 @@ export default function Home() {
             onCafeSelect={handleCafeSelect}
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
+            shadowHandleRef={shadowHandleRef}
             onSunDataSettled={() => { sunDataSettledRef.current = true; trySettleSpinner(); }}
             onEmojiReady={() => { emojiReadyRef.current = true; trySettleSpinner(); }}
           />
@@ -814,8 +830,8 @@ export default function Home() {
                       max={sunsetTime}
                       step={1}
                       value={sliderMinute}
+                      onInput={(e) => handleSliderShadow(Number((e.target as HTMLInputElement).value))}
                       onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
-                      onInput={(e) => handleSliderTimeChange(Number((e.target as HTMLInputElement).value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
