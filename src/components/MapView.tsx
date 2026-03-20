@@ -57,12 +57,10 @@ const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
 // the union of all shadow polygons — overlapping areas are filled only once
 // so opacity never accumulates even where building shadows stack.
 //
-// Zoom-16 resolution so the canvas matches 1:1 at the most common viewing zoom,
-// giving crisp 1-pixel shadow edges. Combined with raster-resampling:"nearest"
-// on the raster layer this eliminates all bilinear blur.
-const _ZOOM16_PX  = (Math.pow(2, 16) * 256) / 360; // pixels per degree at zoom 16
-const SHADOW_W    = Math.ceil((DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west) * _ZOOM16_PX); // ~1966
-const SHADOW_H    = Math.ceil((DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * _ZOOM16_PX); // ~2560
+// Canvas is sized at zoom-16 × devicePixelRatio so it matches physical pixels
+// 1:1 on retina displays. Combined with raster-resampling:"nearest" this gives
+// crisp polygon edges with no bilinear blur and no staircase artifacts.
+// Size is computed lazily in map.on('load') once DPR is known.
 // MapLibre image-source corner order: top-left, top-right, bottom-right, bottom-left
 const SHADOW_COORDS: [[number,number],[number,number],[number,number],[number,number]] = [
   [DISTRICT_BOUNDS.west, DISTRICT_BOUNDS.north],
@@ -654,10 +652,16 @@ export function MapView({
         }
 
         // ── shadow canvas ──────────────────────────────────────────────────
+        // Size at zoom-16 × devicePixelRatio so canvas pixels match physical
+        // pixels 1:1 on retina displays → nearest-neighbour resampling is crisp.
+        const dpr = window.devicePixelRatio ?? 1;
+        const _zoomPx = (Math.pow(2, 16) * 256) / 360 * dpr;
+        const shadowW = Math.ceil((DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west) * _zoomPx);
+        const shadowH = Math.ceil((DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * _zoomPx);
 
         const shadowCanvas = document.createElement("canvas");
-        shadowCanvas.width  = SHADOW_W;
-        shadowCanvas.height = SHADOW_H;
+        shadowCanvas.width  = shadowW;
+        shadowCanvas.height = shadowH;
         shadowCanvasRef.current = shadowCanvas;
 
         // ── sources ────────────────────────────────────────────────────────
@@ -734,7 +738,7 @@ export function MapView({
             // "linear" (default) preserves the canvas's own sub-pixel anti-aliasing
             // exactly at zoom 16 (1:1 canvas-to-screen) — smooth edges, no staircase.
             // "nearest" was crisp but showed pixel steps on diagonal edges.
-            "raster-resampling": "linear",
+            "raster-resampling": "nearest",
           },
         }, before);
 
