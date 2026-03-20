@@ -257,6 +257,7 @@ export default function Home() {
   const deferredVisibleCafeIds = useDeferredValue(visibleCafeIds);
 
   const toggleDistrict = useCallback((d: string) => {
+    setIsCafeSymbolsUpdating(true);
     setVisualDistricts((prev) => {
       const current = prev ?? new Set(allDistricts);
       const next = new Set(current);
@@ -266,6 +267,7 @@ export default function Home() {
   }, [allDistricts]);
 
   const resetFilter = useCallback(() => {
+    setIsCafeSymbolsUpdating(true);
     setVisualDistricts(null);
   }, []);
 
@@ -772,7 +774,7 @@ export default function Home() {
 
           {isCafeSymbolsUpdating && (
             <div className="pointer-events-none absolute inset-0 z-[650] flex items-center justify-center">
-              <svg className="animate-spin h-12 w-12" viewBox="0 0 48 48" fill="none">
+              <svg className="animate-spin h-16 w-16" viewBox="0 0 64 64" fill="none">
                 <defs>
                   <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.85" />
@@ -780,11 +782,11 @@ export default function Home() {
                   </linearGradient>
                 </defs>
                 <circle
-                  cx="24" cy="24" r="19"
+                  cx="32" cy="32" r="25"
                   stroke="url(#spinner-gradient)"
-                  strokeWidth="5"
+                  strokeWidth="6"
                   strokeLinecap="round"
-                  strokeDasharray="88 31"
+                  strokeDasharray="110 47"
                 />
               </svg>
             </div>
@@ -827,6 +829,7 @@ export default function Home() {
                     onClick={() => {
                       const allChecked = !visualDistricts || visualDistricts.size === allDistricts.length;
                       if (allChecked) {
+                        setIsCafeSymbolsUpdating(true);
                         setVisualDistricts(new Set<string>());
                       } else {
                         resetFilter();
