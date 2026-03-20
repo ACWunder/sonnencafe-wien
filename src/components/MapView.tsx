@@ -319,6 +319,15 @@ export function MapView({
   const visibleCafeIdsRef    = useRef<Set<string> | undefined>(visibleCafeIds);
   visibleCafeIdsRef.current  = visibleCafeIds;
 
+  // Precomputed full-day shadow table. Computed once per date in a worker so
+  // subsequent time changes become O(1) lookups (no main-thread computation).
+  const sunPrecomputeWorkerRef = useRef<Worker | null>(null);
+  const precomputedTableRef    = useRef<{
+    table: Record<string, boolean[]>; // cafeId → per-slot inShadow
+    minutes: number[];                // minute-of-day for each slot
+    date: string;
+  } | null>(null);
+
   const [, setFetching]  = useState(false);
 
   // Internal ref always pointing to the latest shadow-update closure.
@@ -349,6 +358,29 @@ export function MapView({
       sunDataTimeoutRef.current = null;
       updateCafesSource(true);
     }, delay);
+  }
+
+  // Kick off background precomputation of the full-day shadow table.
+  // Called when buildings first load and whenever the date changes.
+  // When done, the worker posts 'done' → we call updateCafesSource(true)
+  // which now uses the instant fast path instead of requestIdleCallback chunks.
+  function startSunPrecompute(dateStr: string) {
+    const cafes     = cafesRef.current;
+    const buildings = Array.from(buildingCacheRef.current.values());
+    if (!cafes.length || !buildings.length) return;
+
+    sunPrecomputeWorkerRef.current?.terminate();
+    const w = new Worker(new URL("../workers/sun.worker.ts", import.meta.url));
+    sunPrecomputeWorkerRef.current = w;
+    w.onmessage = (e: MessageEvent) => {
+      if (e.data.type !== "done") return;
+      precomputedTableRef.current = { table: e.data.table, minutes: e.data.minutes, date: dateStr };
+      w.terminate();
+      sunPrecomputeWorkerRef.current = null;
+      // Re-run updateCafesSource — this time the fast path will handle it instantly.
+      updateCafesSource(true);
+    };
+    w.postMessage({ type: "precompute", cafes, buildings, date: dateStr });
   }
 
   function dispatchShadowRender(ts: TimeState) {
@@ -395,6 +427,60 @@ export function MapView({
 
     if (!recomputeSunData) return;
 
+    // ── Fast path: precomputed table ready for today → instant O(1) lookup ──
+    const precomputed = precomputedTableRef.current;
+    const ts0 = timeStateRef.current;
+    if (precomputed && precomputed.date === ts0.date) {
+      const { table, minutes } = precomputed;
+      const [hh, mm] = ts0.time.split(":").map(Number);
+      const currentMinute = hh * 60 + mm;
+
+      const remaining: Record<string, number | null> = {};
+      const timelines: SunTimelineData = {};
+
+      for (const cafe of visibleCafes) {
+        const slots = table[cafe.id];
+        if (!slots) { remaining[cafe.id] = null; continue; }
+
+        // First slot at or after the current time
+        let slotIdx = slots.length - 1;
+        for (let i = 0; i < minutes.length; i++) {
+          if (minutes[i] >= currentMinute) { slotIdx = i; break; }
+        }
+
+        if (slots[slotIdx]) {
+          remaining[cafe.id] = null; // in shadow (or past sunset)
+        } else {
+          let sunMin = 0;
+          for (let i = slotIdx; i < minutes.length; i++) {
+            if (slots[i]) break;
+            sunMin += i + 1 < minutes.length ? minutes[i + 1] - minutes[i] : 10;
+          }
+          remaining[cafe.id] = Math.min(sunMin, 240);
+        }
+
+        timelines[cafe.id] = { inSun: slots.map((v) => !v), startMinute: minutes[0], intervalMin: 10 };
+      }
+
+      onSunRemainingRef.current(remaining);
+      onSunTimelineRef.current(timelines);
+      for (const cafe of visibleCafes) shadowCacheRef.current.set(cafe.id, remaining[cafe.id] === null);
+
+      const selId0 = selectedCafeRef.current?.id ?? null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (source as any).setData({
+        type: "FeatureCollection",
+        features: visibleCafes.map((cafe) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
+          properties: { id: cafe.id, name: cafe.name, inShadow: remaining[cafe.id] === null, isSelected: cafe.id === selId0 },
+        })),
+      });
+      onSunDataSettledRef.current?.();
+      return;
+    }
+
+    // ── Slow path: precomputed table not yet ready — chunked idle computation ─
     // Heavy computation: sun-remaining + day timeline for cafés.
     // Uses requestIdleCallback so chunks only run when the browser is idle,
     // keeping map gestures smooth. Generation counter cancels stale runs.
@@ -522,6 +608,7 @@ export function MapView({
         buildings.forEach((b) => buildingCacheRef.current.set(b.id, b));
         buildingGridRef.current = new BuildingGrid(buildings);
         shadowWorkerRef.current?.postMessage({ type: "init", buildings });
+        startSunPrecompute(timeStateRef.current.date);
 
         const map = mapInstanceRef.current;
         if (!map || !mapReadyRef.current) return;
@@ -857,6 +944,8 @@ export function MapView({
       pendingShadowTimeRef.current = null;
       shadowWorkerRef.current?.terminate();
       shadowWorkerRef.current = null;
+      sunPrecomputeWorkerRef.current?.terminate();
+      sunPrecomputeWorkerRef.current = null;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -874,6 +963,11 @@ export function MapView({
 
     // Rebuild full visual shadow layer
     updateShadowSource(all, timeState);
+    // If the date changed, precomputed table is stale — invalidate and re-precompute.
+    if (precomputedTableRef.current && precomputedTableRef.current.date !== timeState.date) {
+      precomputedTableRef.current = null;
+      startSunPrecompute(timeState.date);
+    }
     scheduleSunDataRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeState]);
@@ -886,6 +980,11 @@ export function MapView({
     // preventing onSunDataSettled from firing before we have real building data.
     const buildingsReady = buildingCacheRef.current.size > 0;
     updateCafesSource(buildingsReady);
+    // If buildings are ready but precompute hasn't started yet (cafes arrived after buildings),
+    // kick it off now.
+    if (buildingsReady && !precomputedTableRef.current && !sunPrecomputeWorkerRef.current) {
+      startSunPrecompute(timeStateRef.current.date);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafes]);
 
