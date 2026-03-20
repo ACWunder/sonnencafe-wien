@@ -343,9 +343,10 @@ export function MapView({
   }
 
   // Push updated café GeoJSON to the map source.
-  // recomputeSunData = true → also kick off the heavy sun-remaining/timeline
-  // computation in idle-time chunks (generation-guarded against stale runs).
-  function updateCafesSource(recomputeSunData = true) {
+  // recomputeSunData = true  → kick off sun-remaining/timeline computation.
+  // incrementalOnly = true   → only compute cafés not yet in sunRemainingRef
+  //                            (used when the visible set grows, not when time changes).
+  function updateCafesSource(recomputeSunData = true, incrementalOnly = false) {
     const map = mapInstanceRef.current;
     if (!map || !mapReadyRef.current) return;
     const source = map.getSource("cafes-source");
@@ -370,7 +371,7 @@ export function MapView({
 
     if (!recomputeSunData) return;
 
-    // Heavy computation: sun-remaining + day timeline for all cafés.
+    // Heavy computation: sun-remaining + day timeline for cafés.
     // Uses requestIdleCallback so chunks only run when the browser is idle,
     // keeping map gestures smooth. Generation counter cancels stale runs.
     const ts = timeStateRef.current;
@@ -391,8 +392,23 @@ export function MapView({
       c.lat >= chunkVp.south && c.lat <= chunkVp.north &&
       c.lng >= chunkVp.west  && c.lng <= chunkVp.east
     ));
-    const allCafes    = [...visible, ...offscreen];
-    const remaining: Record<string, number | null> = {};
+    const allCafes = [...visible, ...offscreen];
+
+    // Incremental mode: skip cafés whose sun data is already cached at this time.
+    const cafesToCompute = incrementalOnly
+      ? allCafes.filter((c) => !Object.prototype.hasOwnProperty.call(sunRemainingRef.current, c.id))
+      : allCafes;
+
+    // Nothing new to compute — settle immediately with existing data.
+    if (cafesToCompute.length === 0) {
+      onSunDataSettledRef.current?.();
+      return;
+    }
+
+    // Seed with existing results so the merged output includes all visible cafés.
+    const remaining: Record<string, number | null> = incrementalOnly
+      ? { ...sunRemainingRef.current }
+      : {};
     const timelines: SunTimelineData = {};
     const CHUNK = 15;
     let idx = 0;
@@ -405,30 +421,27 @@ export function MapView({
 
     function processChunk() {
       if (sunGenRef.current !== gen) return;
-      const end = Math.min(idx + CHUNK, allCafes.length);
+      const end = Math.min(idx + CHUNK, cafesToCompute.length);
       for (; idx < end; idx++) {
-        const cafe = allCafes[idx];
+        const cafe = cafesToCompute[idx];
         const nearbyForCafe = buildingGridRef.current?.getNearby(cafe.lat, cafe.lng)
           ?? Array.from(buildingCacheRef.current.values());
         remaining[cafe.id] = calcSunRemaining(cafe, currentDate, nearbyForCafe);
         timelines[cafe.id] = calcDayTimeline(cafe, dayDate, nearbyForCafe);
       }
-      if (idx < allCafes.length) {
+      if (idx < cafesToCompute.length) {
         schedule(processChunk);
       } else {
         onSunRemainingRef.current(remaining);
         onSunTimelineRef.current(timelines);
-        // Sync dot colors with the accurate calcSunRemaining result
-        // Sync shadow cache with accurate results so fast-path (selection change)
-        // doesn't overwrite these correct values with stale quick-check data.
-        for (const cafe of allCafes) {
+        // Sync shadow cache with accurate results.
+        for (const cafe of cafesToCompute) {
           shadowCacheRef.current.set(cafe.id, remaining[cafe.id] === null);
         }
 
         const source = mapInstanceRef.current?.getSource("cafes-source");
         if (source && mapReadyRef.current) {
           const selId = selectedCafeRef.current?.id ?? null;
-          const visibleIds = visibleCafeIdsRef.current;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (source as any).setData({
             type: "FeatureCollection",
@@ -845,7 +858,7 @@ export function MapView({
   }, [selectedCafe]);
 
   // ── visibility filter changed: update visible markers immediately, then
-  // refresh the expensive sun data once the frame is already painted ─────────
+  // only compute sun data for newly-visible cafés (incremental).
   useEffect(() => {
     if (!mapInstanceRef.current || !mapReadyRef.current) return;
     updateCafesSource(false);
@@ -853,9 +866,9 @@ export function MapView({
     const rafId = requestAnimationFrame(() => {
       setTimeout(() => {
         if (!mapInstanceRef.current || !mapReadyRef.current) return;
-        updateCafesSource(true);
+        updateCafesSource(true, true); // incremental: skip already-computed cafés
       }, 120);
-    }); 
+    });
     return () => cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCafeIds]);

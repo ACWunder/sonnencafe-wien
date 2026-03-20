@@ -358,7 +358,9 @@ export default function Home() {
   }, []);
 
   const handleSunTimeline = useCallback((data: SunTimelineData) => {
-    setSunTimelines(data);
+    // Merge so incremental updates (district/restaurant filter) don't wipe
+    // timeline data for cafés that weren't recomputed.
+    setSunTimelines((prev) => ({ ...prev, ...data }));
   }, []);
 
   useEffect(() => {
@@ -891,6 +893,7 @@ export default function Home() {
                   </div>
                   <label
                     onClick={() => {
+                      setIsCafeSymbolsUpdating(true);
                       setIncludeRestaurants((v) => !v);
                     }}
                     className="flex items-center gap-2.5 px-3.5 py-2 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
