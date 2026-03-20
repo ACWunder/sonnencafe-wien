@@ -420,25 +420,52 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = search.trim();
-    const listCafes = cafes.filter((c) => visibleCafeIds.has(c.id));
     if (!q) {
-      return [...listCafes].sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
+      // No search: show only visible cafes sorted by sun remaining
+      return cafes
+        .filter((c) => visibleCafeIds.has(c.id))
+        .sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
     }
 
-    // Score every cafe; keep those with any match
-    const scored = listCafes
+    // Search active: score across ALL cafes (ignore district/restaurant filter)
+    const scored = cafes
       .map((c) => ({ cafe: c, score: fuzzyScore(q, c) }))
       .filter(({ score }) => score > 0);
 
-    // Sort: match quality first, then sun remaining as tiebreaker
     scored.sort((a, b) =>
       b.score !== a.score
         ? b.score - a.score
         : (sunRemaining[b.cafe.id] ?? -1) - (sunRemaining[a.cafe.id] ?? -1)
     );
 
-    return scored.map(({ cafe }) => cafe);
+    // If there are good matches (substring/word, ≥60), drop fuzzy-only results
+    // so exact matches aren't buried under unrelated fuzzy hits.
+    const hasGoodMatch = scored.some(({ score }) => score >= 60);
+    return (hasGoodMatch ? scored.filter(({ score }) => score >= 60) : scored)
+      .map(({ cafe }) => cafe);
   }, [cafes, visibleCafeIds, search, sunRemaining]);
+
+  // Select a cafe and auto-adjust filters so it becomes visible on the map.
+  const handleCafeSelect = useCallback((cafe: Cafe | null) => {
+    setSelectedCafe(cafe);
+    if (!cafe) return;
+    let filterChanged = false;
+    // If the cafe's district is currently filtered out, add it
+    if (visualDistricts !== null && !visualDistricts.has(cafe.district ?? "Wien")) {
+      setIsCafeSymbolsUpdating(true);
+      setVisualDistricts((prev) => {
+        const next = new Set(prev ?? allDistricts);
+        next.add(cafe.district ?? "Wien");
+        return next.size === allDistricts.length ? null : next;
+      });
+      filterChanged = true;
+    }
+    // If it's a restaurant and restaurants are hidden, enable them
+    if (!includeRestaurants && isRestaurantType(cafe.tags)) {
+      if (!filterChanged) setIsCafeSymbolsUpdating(true);
+      setIncludeRestaurants(true);
+    }
+  }, [visualDistricts, allDistricts, includeRestaurants]);
 
   const currentMinute = (() => {
     const [h, m] = timeState.time.split(":").map(Number);
@@ -633,7 +660,7 @@ export default function Home() {
                   <li key={cafe.id}>
                     <button
                       onClick={() => {
-                        setSelectedCafe(isSelected ? null : cafe);
+                        handleCafeSelect(isSelected ? null : cafe);
                         setSidebarOpen(false);
                       }}
                       className={`w-full text-left px-3 py-2.5 transition-all duration-150 border-l-2 ${
@@ -758,7 +785,7 @@ export default function Home() {
             visibleCafeIds={deferredVisibleCafeIds}
             sunRemaining={sunRemaining}
             selectedCafe={selectedCafe}
-            onCafeSelect={setSelectedCafe}
+            onCafeSelect={handleCafeSelect}
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
             onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
