@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue, startTransition } from "react";
 import { format } from "date-fns";
 import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } from "lucide-react";
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
@@ -431,18 +431,23 @@ export default function Home() {
     shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
   }, [sunriseTime, sunsetTime]);
 
-  // React state update — triggers sun data recompute, time display, etc.
-  // Runs on every slider change alongside handleSliderShadow.
+  // React state update — triggers sun data recompute and time display.
+  // setSelectedTime is urgent (keeps the slider thumb position in sync).
+  // setTimeState + showSpinner are wrapped in startTransition so React can
+  // batch/skip intermediate renders during fast dragging, freeing the main
+  // thread for MapLibre's animation loop.
   const handleSliderTimeChange = useCallback((minute: number) => {
     if (sunriseTime === null || sunsetTime === null) return;
     const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
     const nextTime = minuteToTime(nextMinute);
-    showSpinner();
-    setSelectedTime(nextMinute);
-    setTimeState((prev) => (
-      prev.time === nextTime ? prev : { ...prev, time: nextTime }
-    ));
-  }, [sunriseTime, sunsetTime]);
+    setSelectedTime(nextMinute); // urgent — keeps slider thumb in sync
+    startTransition(() => {
+      showSpinner();
+      setTimeState((prev) => (
+        prev.time === nextTime ? prev : { ...prev, time: nextTime }
+      ));
+    });
+  }, [sunriseTime, sunsetTime, showSpinner]);
 
   const filtered = useMemo(() => {
     const q = search.trim();
