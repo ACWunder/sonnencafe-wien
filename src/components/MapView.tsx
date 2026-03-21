@@ -226,6 +226,8 @@ export function MapView({
   const sunWorkerRef           = useRef<Worker | null>(null);
   const sunComputeInFlightRef  = useRef(false);
   const pendingSunComputeRef   = useRef<{ cafes: Cafe[]; date: string; time: string } | null>(null);
+  const pendingBackgroundRef   = useRef<{ cafes: Cafe[]; date: string; time: string } | null>(null);
+  const isBackgroundComputeRef = useRef(false);
 
   const [, setFetching]  = useState(false);
 
@@ -322,17 +324,33 @@ export function MapView({
 
     // Dispatch to background worker — no main-thread computation, no idle scheduling.
     const ts = timeStateRef.current;
-    // On time change (not incremental): compute ALL cafés so sidebar search/filter
-    // always has sun status even for cafés hidden by the current map filter.
+    // Phase 1: visible cafés → fast update for map + spinner.
+    // Phase 2 (background): remaining cafés → fills sidebar/search results.
     const cafesToCompute = incrementalOnly
       ? visibleCafes.filter((c) => !Object.prototype.hasOwnProperty.call(sunRemainingRef.current, c.id))
-      : cafesRef.current;
+      : visibleCafes;
+
+    if (!incrementalOnly) {
+      const visibleIds = new Set(visibleCafes.map((c) => c.id));
+      const bgCafes = cafesRef.current.filter((c) => !visibleIds.has(c.id));
+      pendingBackgroundRef.current = bgCafes.length > 0
+        ? { cafes: bgCafes, date: ts.date, time: ts.time }
+        : null;
+    }
 
     if (cafesToCompute.length === 0) {
       onSunDataSettledRef.current?.();
+      // Still kick off background batch if any
+      const bg = pendingBackgroundRef.current;
+      if (bg) {
+        pendingBackgroundRef.current = null;
+        isBackgroundComputeRef.current = true;
+        dispatchSunCompute(bg.cafes, bg.date, bg.time);
+      }
       return;
     }
 
+    isBackgroundComputeRef.current = false;
     dispatchSunCompute(cafesToCompute, ts.date, ts.time);
   }
 
@@ -500,14 +518,28 @@ export function MapView({
             })),
           });
         }
-        onSunDataSettledRef.current?.();
+        const wasBackground = isBackgroundComputeRef.current;
+        isBackgroundComputeRef.current = false;
 
-        // Drain pending request
+        if (!wasBackground) {
+          onSunDataSettledRef.current?.();
+        }
+
+        // Drain pending (time-change) request first; if none, run background batch
         const next = pendingSunComputeRef.current;
         pendingSunComputeRef.current = null;
         if (next) {
+          pendingBackgroundRef.current = null; // stale background, discard
           sunComputeInFlightRef.current = true;
           sunWorker.postMessage({ type: "compute", cafes: next.cafes, date: next.date, time: next.time });
+        } else {
+          const bg = pendingBackgroundRef.current;
+          if (bg) {
+            pendingBackgroundRef.current = null;
+            isBackgroundComputeRef.current = true;
+            sunComputeInFlightRef.current = true;
+            sunWorker.postMessage({ type: "compute", cafes: bg.cafes, date: bg.date, time: bg.time });
+          }
         }
       };
     }
