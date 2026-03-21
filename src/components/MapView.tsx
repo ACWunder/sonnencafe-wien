@@ -80,6 +80,7 @@ const EMPTY_FEATURE_COLLECTION: { type: "FeatureCollection"; features: never[] }
 
 export interface MapViewShadowHandle {
   updateShadow: (ts: TimeState) => void;
+  startLiveLocation: () => void;
 }
 
 interface LiveLocationState {
@@ -335,7 +336,10 @@ export function MapView({
     }
   };
   if (shadowHandleRef) {
-    shadowHandleRef.current = { updateShadow: shadowUpdateFnRef.current };
+    shadowHandleRef.current = {
+      updateShadow: shadowUpdateFnRef.current,
+      startLiveLocation: startLiveLocationTracking,
+    };
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

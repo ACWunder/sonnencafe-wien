@@ -251,6 +251,8 @@ export default function Home() {
   const [sunTimelines, setSunTimelines] = useState<SunTimelineData>({});
   const listRef = useRef<HTMLUListElement>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [sortMode, setSortMode] = useState<"sun" | "location">("sun");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
   const [showImpressum, setShowImpressum] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -464,18 +466,12 @@ export default function Home() {
     if (!q) {
       const visible = cafes.filter((c) => visibleCafeIds.has(c.id));
 
-      if (userLocation) {
-        const nearbyThresholdM = 800;
+      if (sortMode === "location" && userLocation) {
         return visible.sort((a, b) => {
-          const aSunny = (sunRemaining[a.id] ?? -1) >= 0;
-          const bSunny = (sunRemaining[b.id] ?? -1) >= 0;
-          const aNear = distanceMeters(userLocation.lat, userLocation.lng, a.lat, a.lng) <= nearbyThresholdM;
-          const bNear = distanceMeters(userLocation.lat, userLocation.lng, b.lat, b.lng) <= nearbyThresholdM;
-          const aSunnyNear = aSunny && aNear;
-          const bSunnyNear = bSunny && bNear;
-
-          if (aSunnyNear !== bSunnyNear) return aSunnyNear ? -1 : 1;
-          if (aSunny !== bSunny) return aSunny ? -1 : 1;
+          const distanceDiff =
+            distanceMeters(userLocation.lat, userLocation.lng, a.lat, a.lng) -
+            distanceMeters(userLocation.lat, userLocation.lng, b.lat, b.lng);
+          if (distanceDiff !== 0) return distanceDiff;
           return a.name.localeCompare(b.name, "de");
         });
       }
@@ -502,7 +498,32 @@ export default function Home() {
     const hasGoodMatch = scored.some(({ score }) => score >= 60);
     return (hasGoodMatch ? scored.filter(({ score }) => score >= 60) : scored)
       .map(({ cafe }) => cafe);
-  }, [cafes, visibleCafeIds, search, sunRemaining, userLocation]);
+  }, [cafes, visibleCafeIds, search, sunRemaining, userLocation, sortMode]);
+
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest("[data-sort-menu]") || target?.closest("[data-sort-trigger]")) return;
+      setSortMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [sortMenuOpen]);
+
+  const handleSortChange = useCallback((mode: "sun" | "location") => {
+    setSortMode(mode);
+    setSortMenuOpen(false);
+    if (mode === "location" && !userLocation) {
+      shadowHandleRef.current?.startLiveLocation();
+    }
+  }, [userLocation]);
 
   // Select a cafe and auto-adjust filters so it becomes visible on the map.
   const handleCafeSelect = useCallback((cafe: Cafe | null) => {
@@ -691,25 +712,65 @@ export default function Home() {
 
             {/* Search */}
             <div className="px-3 pt-3 pb-2 shrink-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-300 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Café suchen…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 text-base font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
-                />
-                {search && (
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-300 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Café suchen…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-9 pr-9 py-2 text-base font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      aria-label="Suche leeren"
+                      onClick={() => setSearch("")}
+                      className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <div className="relative shrink-0">
                   <button
                     type="button"
-                    aria-label="Suche leeren"
-                    onClick={() => setSearch("")}
-                    className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                    data-sort-trigger
+                    aria-label="Sortierung ändern"
+                    onClick={() => setSortMenuOpen((open) => !open)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-100 bg-zinc-50 text-zinc-500 transition-colors hover:border-zinc-200 hover:text-zinc-700"
                   >
-                    <X className="h-3 w-3" />
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
                   </button>
-                )}
+                  {sortMenuOpen && (
+                    <div
+                      data-sort-menu
+                      className="absolute right-0 top-12 z-20 min-w-[156px] rounded-2xl border border-zinc-100 bg-white p-1.5 shadow-xl shadow-zinc-200/60"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSortChange("sun")}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12px] font-body transition-colors ${
+                          sortMode === "sun" ? "bg-amber-50 text-amber-700" : "text-zinc-600 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <span>Sonnenstunden</span>
+                        <Sun className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSortChange("location")}
+                        className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12px] font-body transition-colors ${
+                          sortMode === "location" ? "bg-amber-50 text-amber-700" : "text-zinc-600 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <span>Standort</span>
+                        <MapPin className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="text-[10px] text-zinc-300 mt-1.5 font-body px-0.5">
                 {filtered.length} {filtered.length === 1 ? "Café" : "Cafés"}
@@ -787,25 +848,65 @@ export default function Home() {
             />
           )}
           <div className="px-3 pt-3 pb-2 shrink-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-300 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Café suchen…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 text-[13px] font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
-              />
-              {search && (
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-300 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Café suchen…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2 text-[13px] font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    aria-label="Suche leeren"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <div className="relative shrink-0">
                 <button
                   type="button"
-                  aria-label="Suche leeren"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                  data-sort-trigger
+                  aria-label="Sortierung ändern"
+                  onClick={() => setSortMenuOpen((open) => !open)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-100 bg-zinc-50 text-zinc-500 transition-colors hover:border-zinc-200 hover:text-zinc-700"
                 >
-                  <X className="h-3 w-3" />
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
                 </button>
-              )}
+                {sortMenuOpen && (
+                  <div
+                    data-sort-menu
+                    className="absolute right-0 top-12 z-20 min-w-[156px] rounded-2xl border border-zinc-100 bg-white p-1.5 shadow-xl shadow-zinc-200/60"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSortChange("sun")}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12px] font-body transition-colors ${
+                        sortMode === "sun" ? "bg-amber-50 text-amber-700" : "text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      <span>Sonnenstunden</span>
+                      <Sun className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSortChange("location")}
+                      className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12px] font-body transition-colors ${
+                        sortMode === "location" ? "bg-amber-50 text-amber-700" : "text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      <span>Standort</span>
+                      <MapPin className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-[10px] text-zinc-300 mt-1.5 font-body px-0.5">
               {filtered.length} {filtered.length === 1 ? "Café" : "Cafés"}
