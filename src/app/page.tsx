@@ -1245,7 +1245,7 @@ function SelectedCafeCard({
           </h2>
 
           {(openStatus !== null || todayHours) && (
-            <div className="mt-0 min-w-0">
+            <div className="mt-0.5 min-w-0">
               <div
                 className={`text-[10px] font-body font-semibold leading-[1.1] break-words ${
                   openStatus === false ? "text-red-400" : ""
