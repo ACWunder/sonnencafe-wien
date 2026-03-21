@@ -1249,9 +1249,9 @@ function SelectedCafeCard({
 
         <div className="min-w-0 pr-2">
           {(openStatus !== null || todayHours) && (
-            <div className="mt-0.5 min-w-0">
+            <div className="mt-0 min-w-0">
               <div
-                className={`text-[10px] font-body font-semibold leading-[1.25] break-words ${
+                className={`text-[10px] font-body font-semibold leading-[1.1] break-words ${
                   openStatus === false ? "text-red-400" : ""
                 }`}
                 style={openStatus === true ? { color: "#00cd00" } : openStatus === null ? { color: "#71717a" } : undefined}
@@ -1280,7 +1280,7 @@ function SelectedCafeCard({
             {isSunny ? (
               <span className="shrink-0 leading-none">☀️</span>
             ) : (
-              <span className="shrink-0 text-[10px] leading-none">🌑</span>
+              <span className="shrink-0 text-[8px] leading-none">🌑</span>
             )}
             <span className="truncate">{sunLabel}</span>
           </div>
