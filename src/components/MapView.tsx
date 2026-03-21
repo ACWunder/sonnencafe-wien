@@ -980,21 +980,15 @@ function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: ()
         <text x={3}          y={r + 2} textAnchor="middle" fontSize="5" fill="#64748b" fontFamily="Figtree, sans-serif" fontWeight="600">W</text>
         <text x={size - 3}   y={r + 2} textAnchor="middle" fontSize="5" fill="#64748b" fontFamily="Figtree, sans-serif" fontWeight="600">O</text>
         {isUp ? (
-          <>
-            <circle cx={sx} cy={sy} r={5} fill="#fde68a" opacity="0.5" />
-            <circle cx={sx} cy={sy} r={3} fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
-              const rad = (angle * Math.PI) / 180;
-              return (
-                <line
-                  key={angle}
-                  x1={sx + 4 * Math.cos(rad)} y1={sy + 4 * Math.sin(rad)}
-                  x2={sx + 6 * Math.cos(rad)} y2={sy + 6 * Math.sin(rad)}
-                  stroke="#f59e0b" strokeWidth="1" strokeLinecap="round"
-                />
-              );
-            })}
-          </>
+          <text
+            x={sx}
+            y={sy + 5}
+            textAnchor="middle"
+            fontSize="16"
+            style={{ fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif" }}
+          >
+            ☀️
+          </text>
         ) : (
           <text x={r} y={r + 5} textAnchor="middle" fontSize="16" fill="#94a3b8">🌙</text>
         )}
