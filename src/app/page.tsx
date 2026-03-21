@@ -618,7 +618,7 @@ export default function Home() {
 
         <button
           onClick={() => { setShowImpressum(true); setSelectedCafe(null); }}
-          className="text-zinc-300 hover:text-zinc-500 transition-colors p-1 shrink-0"
+          className="-ml-1 text-zinc-300 hover:text-zinc-500 transition-colors p-1 shrink-0"
           title="Impressum"
         >
           <Info className="w-3.5 h-3.5" />
