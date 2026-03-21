@@ -212,15 +212,7 @@ export default function Home() {
   const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
   const timeStateRef = useRef(timeState);
   timeStateRef.current = timeState;
-  const sunDataSettledRef = useRef(false);
-  const emojiReadyRef = useRef(false);
-  const trySettleSpinner = useCallback(() => {
-    if (sunDataSettledRef.current && emojiReadyRef.current) {
-      setIsCafeSymbolsUpdating(false);
-    }
-  }, []);
   const showSpinner = useCallback(() => {
-    sunDataSettledRef.current = false;
     setIsCafeSymbolsUpdating(true);
   }, []);
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
@@ -820,8 +812,7 @@ export default function Home() {
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
-            onSunDataSettled={() => { sunDataSettledRef.current = true; trySettleSpinner(); }}
-            onEmojiReady={() => { emojiReadyRef.current = true; trySettleSpinner(); }}
+            onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
           />
 
           {hasTimeSlider && (

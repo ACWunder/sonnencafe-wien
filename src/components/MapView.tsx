@@ -86,7 +86,6 @@ interface MapViewProps {
   onSunRemaining: (data: Record<string, number | null>) => void;
   onSunTimeline: (data: SunTimelineData) => void;
   onSunDataSettled?: () => void;
-  onEmojiReady?: () => void;
   // Ref populated by MapView so callers can trigger shadow updates without
   // going through React state (removes one full render-cycle of latency).
   shadowHandleRef?: React.MutableRefObject<MapViewShadowHandle | null>;
@@ -181,7 +180,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, onEmojiReady, shadowHandleRef, visibleCafeIds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -215,8 +214,6 @@ export function MapView({
   onSunTimelineRef.current = onSunTimeline;
   const onSunDataSettledRef = useRef(onSunDataSettled);
   onSunDataSettledRef.current = onSunDataSettled;
-  const onEmojiReadyRef = useRef(onEmojiReady);
-  onEmojiReadyRef.current = onEmojiReady;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
@@ -684,7 +681,6 @@ export function MapView({
 
         // Sunny cafés — ☀️ emoji loaded from Twemoji CDN, added once image is ready
         loadSunEmoji(map, () => {
-          onEmojiReadyRef.current?.();
           if (!mapReadyRef.current) return;
           map.addLayer({
             id: "cafes-sunny",
