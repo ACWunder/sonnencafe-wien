@@ -582,6 +582,24 @@ export function MapView({
     }
   }
 
+  function ensureLiveLocationWatch() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (locationWatchIdRef.current !== null) return;
+
+    locationWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => acceptLocationUpdate(pos),
+      () => {
+        setIsTrackingLocation(false);
+        locationWatchIdRef.current = null;
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      },
+    );
+  }
+
   function startLiveLocationTracking() {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
@@ -597,13 +615,13 @@ export function MapView({
       });
     }
 
-    if (locationWatchIdRef.current !== null) return;
-
-    locationWatchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => acceptLocationUpdate(pos),
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        acceptLocationUpdate(pos);
+        ensureLiveLocationWatch();
+      },
       () => {
         setIsTrackingLocation(false);
-        locationWatchIdRef.current = null;
       },
       {
         enableHighAccuracy: true,
