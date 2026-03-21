@@ -217,9 +217,8 @@ export default function Home() {
   }, []);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
-  // Uncontrolled slider — no React state during drag, DOM updated imperatively.
-  const sliderRef         = useRef<HTMLInputElement>(null);
-  const sliderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Uncontrolled slider — zero main-thread work during drag.
+  const sliderRef = useRef<HTMLInputElement>(null);
 
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
@@ -424,26 +423,19 @@ export default function Home() {
     sliderRef.current.value = String(clampMinute(timeToMinute(timeState.time), sunriseTime, sunsetTime));
   }, [timeState.time, sunriseTime, sunsetTime]);
 
-  // Shadow update — imperative, zero React re-renders.
-  const handleSliderShadow = useCallback((minute: number) => {
+  // Called once when the user releases the slider.
+  // During drag: zero main-thread work so the thumb moves at native speed.
+  const handleSliderCommit = useCallback((minute: number) => {
     if (sunriseTime === null || sunsetTime === null) return;
-    const nextTime = minuteToTime(clampMinute(minute, sunriseTime, sunsetTime));
+    const clamped = clampMinute(minute, sunriseTime, sunsetTime);
+    const nextTime = minuteToTime(clamped);
+    // Shadow update (imperative, no React)
     shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
-  }, [sunriseTime, sunsetTime]);
-
-  // State update — debounced so it only fires when the user pauses dragging.
-  // Zero React re-renders during fast slider movement.
-  const handleSliderTimeChange = useCallback((minute: number) => {
-    if (sunriseTime === null || sunsetTime === null) return;
-    const nextTime = minuteToTime(clampMinute(minute, sunriseTime, sunsetTime));
-    if (sliderDebounceRef.current) clearTimeout(sliderDebounceRef.current);
-    sliderDebounceRef.current = setTimeout(() => {
-      sliderDebounceRef.current = null;
-      startTransition(() => {
-        showSpinner();
-        setTimeState((prev) => prev.time === nextTime ? prev : { ...prev, time: nextTime });
-      });
-    }, 150);
+    // State update (triggers café recompute + spinner)
+    startTransition(() => {
+      showSpinner();
+      setTimeState((prev) => prev.time === nextTime ? prev : { ...prev, time: nextTime });
+    });
   }, [sunriseTime, sunsetTime, showSpinner]);
 
   const filtered = useMemo(() => {
@@ -836,11 +828,8 @@ export default function Home() {
                       max={sunsetTime}
                       step={1}
                       defaultValue={sliderMinute}
-                      onInput={(e) => {
-                        const v = Number((e.target as HTMLInputElement).value);
-                        handleSliderShadow(v);
-                        handleSliderTimeChange(v);
-                      }}
+                      onPointerUp={(e) => handleSliderCommit(Number((e.target as HTMLInputElement).value))}
+                      onTouchEnd={(e) => handleSliderCommit(Number((e.currentTarget as HTMLInputElement).value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
