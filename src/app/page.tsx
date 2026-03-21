@@ -1268,7 +1268,7 @@ function SelectedCafeCard({
           )}
 
           {/* Sun pill */}
-          <div className={`inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full font-body font-medium whitespace-nowrap max-w-full overflow-hidden text-[10.5px] ${
+          <div className={`inline-flex max-w-full items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full font-body font-medium text-[10.5px] ${
             isSunny
               ? "bg-orange-100/80 text-orange-600"
               : "bg-zinc-100 text-zinc-500"
@@ -1278,7 +1278,7 @@ function SelectedCafeCard({
             ) : (
               <span className="shrink-0 text-[8px] leading-none">🌑</span>
             )}
-            <span className="truncate">{sunLabel}</span>
+            <span className="min-w-0 break-words leading-[1.2]">{sunLabel}</span>
           </div>
         </div>
       </div>
