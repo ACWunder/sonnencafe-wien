@@ -1225,15 +1225,29 @@ function SelectedCafeCard({
     <div className={`m-3 rounded-2xl overflow-hidden border border-zinc-100 shadow-xl shadow-zinc-200/40 shrink-0 bg-white relative cafe-card-enter${isClosing ? " cafe-card-leave" : ""}`}>
 
       {/* Card header */}
-      <div className={`flex items-start pl-4 pr-2 pt-4 pb-3.5 ${
+      <div className={`pl-4 pr-2 pt-4 pb-3.5 ${
         isSunny
           ? "bg-gradient-to-b from-amber-100 via-amber-50 to-white"
           : "bg-gradient-to-b from-zinc-200 via-zinc-100 to-white"
       }`}>
-        <div className="min-w-0 flex-1 pr-2">
-          <h2 className="font-display font-bold text-zinc-900 text-[16px] leading-[1.15] tracking-tight break-words">
-            {cafe.name}
-          </h2>
+        <div className="flex items-start">
+          <div className="min-w-0 flex-1 pr-2">
+            <h2 className="font-display font-bold text-zinc-900 text-[16px] leading-[1.15] tracking-tight break-words">
+              {cafe.name}
+            </h2>
+          </div>
+
+          <button
+            onClick={handleClose}
+            className="shrink-0 -mr-0.5 -mt-0.5 ml-1 flex h-[48px] w-[48px] items-start justify-center pt-0.5 active:scale-90 transition-transform duration-100"
+          >
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-zinc-900/[0.07]">
+              <X className="w-[15px] h-[15px] text-zinc-500" strokeWidth={2.5} />
+            </span>
+          </button>
+        </div>
+
+        <div className="min-w-0 pr-2">
           {(openStatus !== null || todayHours) && (
             <div className="mt-1.5 min-w-0">
               <div
@@ -1251,7 +1265,7 @@ function SelectedCafeCard({
           {(cafe.address || cafe.district) && (
             <div className="flex items-center gap-1 mt-1.5 min-w-0">
               <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
-              <p className="min-w-0 truncate text-[11px] text-zinc-500 font-body leading-none">
+              <p className="min-w-0 text-[11px] text-zinc-500 font-body leading-[1.25] break-words">
                 {cafe.address || cafe.district}
               </p>
             </div>
@@ -1263,19 +1277,10 @@ function SelectedCafeCard({
               ? "bg-orange-100/80 text-orange-600"
               : "bg-zinc-100 text-zinc-500"
           }`}>
-            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSunny ? "bg-orange-400 sun-pulse" : "bg-zinc-400"}`} />
+            <span className="shrink-0 leading-none">☀️</span>
             <span className="truncate">{sunLabel}</span>
           </div>
         </div>
-
-        <button
-          onClick={handleClose}
-          className="shrink-0 -mr-0.5 -mt-0.5 ml-1 flex h-[48px] w-[48px] items-start justify-center pt-0.5 active:scale-90 transition-transform duration-100"
-        >
-          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-zinc-900/[0.07]">
-            <X className="w-[15px] h-[15px] text-zinc-500" strokeWidth={2.5} />
-          </span>
-        </button>
       </div>
 
       {/* Sun timeline */}
