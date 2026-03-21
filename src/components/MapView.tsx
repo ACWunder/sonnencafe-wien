@@ -536,6 +536,10 @@ export function MapView({
         )?.id;
         const before = firstSymbolId; // undefined is fine — appends to end if no symbols
 
+        // Café dots are inserted before the place/district label layer so they
+        // render above road names but below Viertel/suburb labels.
+        const beforePlace = map.getLayer("label_other") ? "label_other" : before;
+
         // ── hide POI layers ────────────────────────────────────────────────
         // Hide all shop/restaurant/icon POI layers – keep only road & place labels.
         map.getStyle().layers.forEach((l: { id: string; type: string; "source-layer"?: string }) => {
@@ -656,6 +660,7 @@ export function MapView({
         }, before);
 
         // Shade cafés — reliable circle layer, always visible
+        // Inserted before place labels so dots are above road names but below district names.
         map.addLayer({
           id: "cafes",
           type: "circle",
@@ -677,7 +682,7 @@ export function MapView({
             "circle-radius-transition": { duration: 220, delay: 0 },
             "circle-stroke-width-transition": { duration: 220, delay: 0 },
           },
-        }, before);
+        }, beforePlace);
 
         // Sunny cafés — ☀️ emoji loaded from Twemoji CDN, added once image is ready
         loadSunEmoji(map, () => {
@@ -701,7 +706,7 @@ export function MapView({
               "icon-anchor": "center",
               "symbol-sort-key": ["case", ["get", "isSelected"], 1, 0],
             },
-          }, before);
+          }, beforePlace);
         });
 
         // Invisible 32 px hit area so cafés are easy to tap on mobile
@@ -714,7 +719,7 @@ export function MapView({
             "circle-opacity": 0,
             "circle-stroke-opacity": 0,
           },
-        }, before);
+        }, beforePlace);
 
         // ── interactions ──────────────────────────────────────────────────
 
