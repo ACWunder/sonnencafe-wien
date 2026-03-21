@@ -224,6 +224,9 @@ export default function Home() {
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  // Tracks whether the /api/cafes fetch has completed at least once.
+  // Prevents the spinner disappearing when buildings load before cafes.
+  const cafesLoadedRef = useRef(false);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -404,8 +407,11 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/cafes")
       .then((r) => r.json())
-      .then((d) => setCafes(d.cafes ?? []))
-      .catch(() => {});
+      .then((d) => {
+        cafesLoadedRef.current = true;
+        setCafes(d.cafes ?? []);
+      })
+      .catch(() => { cafesLoadedRef.current = true; });
   }, []);
 
   useEffect(() => {
@@ -815,7 +821,7 @@ export default function Home() {
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
-            onSunDataSettled={() => setIsCafeSymbolsUpdating(false)}
+            onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
           />
 
           {hasTimeSlider && (
