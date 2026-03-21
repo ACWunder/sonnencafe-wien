@@ -322,9 +322,11 @@ export function MapView({
 
     // Dispatch to background worker — no main-thread computation, no idle scheduling.
     const ts = timeStateRef.current;
+    // On time change (not incremental): compute ALL cafés so sidebar search/filter
+    // always has sun status even for cafés hidden by the current map filter.
     const cafesToCompute = incrementalOnly
       ? visibleCafes.filter((c) => !Object.prototype.hasOwnProperty.call(sunRemainingRef.current, c.id))
-      : visibleCafes;
+      : cafesRef.current;
 
     if (cafesToCompute.length === 0) {
       onSunDataSettledRef.current?.();
