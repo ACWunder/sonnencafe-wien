@@ -693,52 +693,65 @@ export function MapView({
           paint: { "line-color": "#c9beaf", "line-width": 0.7 },
         }, before);
 
-        // Shade cafés — reliable circle layer, always visible
-        // Inserted before place labels so dots are above road names but below district names.
+        // Shade cafés (non-selected) — circle layer below sunny layer
         map.addLayer({
           id: "cafes",
           type: "circle",
           source: "cafes-source",
-          filter: ["==", ["get", "inShadow"], true],
-          layout: {
-            "circle-sort-key": ["case", ["get", "isSelected"], 1, 0],
-          },
+          filter: ["all", ["==", ["get", "inShadow"], true], ["==", ["get", "isSelected"], false]],
           paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              13, ["case", ["get", "isSelected"], 8, 5],
-              16, ["case", ["get", "isSelected"], 10, 6],
-              17, ["case", ["get", "isSelected"], 11, 7],
-            ],
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 5, 16, 6, 17, 7],
             "circle-color": "#374151",
-            "circle-stroke-width": ["case", ["get", "isSelected"], 2.5, 1.5],
+            "circle-stroke-width": 1.5,
             "circle-stroke-color": "#ffffff",
-            "circle-radius-transition": { duration: 220, delay: 0 },
-            "circle-stroke-width-transition": { duration: 220, delay: 0 },
           },
         }, beforePlace);
 
-        // Sunny cafés — ☀️ emoji loaded from Twemoji CDN, added once image is ready
+        // Sunny cafés (non-selected) + selected cafés on top — emoji loaded once
         loadSunEmoji(map, () => {
           if (!mapReadyRef.current) return;
+          // Non-selected sunny cafés
           map.addLayer({
             id: "cafes-sunny",
             type: "symbol",
             source: "cafes-source",
-            filter: ["==", ["get", "inShadow"], false],
+            filter: ["all", ["==", ["get", "inShadow"], false], ["==", ["get", "isSelected"], false]],
             layout: {
               "icon-image": "cafe-sunny",
-              "icon-size": [
-                "interpolate", ["linear"], ["zoom"],
-                12, ["case", ["get", "isSelected"], 0.19, 0.13],
-                14, ["case", ["get", "isSelected"], 0.25, 0.17],
-                16, ["case", ["get", "isSelected"], 0.31, 0.22],
-                18, ["case", ["get", "isSelected"], 0.38, 0.26],
-              ],
+              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.13, 14, 0.17, 16, 0.22, 18, 0.26],
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               "icon-anchor": "center",
-              "symbol-sort-key": ["case", ["get", "isSelected"], 1, 0],
+            },
+          }, beforePlace);
+
+          // Selected shady café — rendered above all others
+          map.addLayer({
+            id: "cafes-selected-shadow",
+            type: "circle",
+            source: "cafes-source",
+            filter: ["all", ["==", ["get", "inShadow"], true], ["==", ["get", "isSelected"], true]],
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 8, 16, 10, 17, 11],
+              "circle-color": "#374151",
+              "circle-stroke-width": 2.5,
+              "circle-stroke-color": "#ffffff",
+              "circle-radius-transition": { duration: 220, delay: 0 },
+            },
+          }, beforePlace);
+
+          // Selected sunny café — rendered above all others
+          map.addLayer({
+            id: "cafes-selected-sunny",
+            type: "symbol",
+            source: "cafes-source",
+            filter: ["all", ["==", ["get", "inShadow"], false], ["==", ["get", "isSelected"], true]],
+            layout: {
+              "icon-image": "cafe-sunny",
+              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.19, 14, 0.25, 16, 0.31, 18, 0.38],
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              "icon-anchor": "center",
             },
           }, beforePlace);
         });
