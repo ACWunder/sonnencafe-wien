@@ -222,26 +222,28 @@ function createLocationPuck() {
   const root = document.createElement("div");
   root.style.cssText = [
     "position:relative",
-    "width:56px",
-    "height:56px",
+    "width:48px",
+    "height:48px",
     "pointer-events:none",
   ].join(";");
 
-  const heading = document.createElement("div");
-  heading.style.cssText = [
+  const cone = document.createElement("div");
+  cone.style.cssText = [
     "position:absolute",
     "left:50%",
-    "top:6px",
-    "width:34px",
-    "height:34px",
-    "margin-left:-17px",
-    "background:linear-gradient(180deg, rgba(66,133,244,0.48) 0%, rgba(66,133,244,0.16) 100%)",
-    "clip-path:polygon(50% 0%, 15% 100%, 85% 100%)",
-    "transform-origin:50% 74%",
+    "top:50%",
+    "width:46px",
+    "height:46px",
+    "margin-left:-23px",
+    "margin-top:-23px",
+    "border-radius:9999px",
+    "background:conic-gradient(from 210deg, rgba(66,133,244,0) 0deg 100deg, rgba(66,133,244,0.3) 100deg 260deg, rgba(66,133,244,0) 260deg 360deg)",
+    "filter:blur(0.2px)",
+    "transform-origin:50% 50%",
     "opacity:0",
     "transition:transform 180ms ease, opacity 180ms ease",
   ].join(";");
-  root.appendChild(heading);
+  root.appendChild(cone);
 
   const pulse = document.createElement("div");
   pulse.style.cssText = [
@@ -254,28 +256,13 @@ function createLocationPuck() {
     "margin-top:-9px",
     "border-radius:9999px",
     "background:#4285f4",
-    "border:3px solid rgba(255,255,255,0.96)",
-    "box-shadow:0 0 0 4px rgba(66,133,244,0.24)",
+    "border:2.5px solid rgba(255,255,255,0.96)",
+    "box-shadow:0 0 0 4px rgba(66,133,244,0.25)",
     "animation:locationPulse 2s ease-in-out infinite",
   ].join(";");
   root.appendChild(pulse);
 
-  const center = document.createElement("div");
-  center.style.cssText = [
-    "position:absolute",
-    "left:50%",
-    "top:50%",
-    "width:6px",
-    "height:6px",
-    "margin-left:-3px",
-    "margin-top:-3px",
-    "border-radius:9999px",
-    "background:#ffffff",
-    "opacity:0.95",
-  ].join(";");
-  root.appendChild(center);
-
-  return { root, heading };
+  return { root, heading: cone };
 }
 
 // Load Twemoji sun PNG and add as map image; calls onReady when done.
@@ -323,6 +310,8 @@ export function MapView({
   const locationWatchIdRef = useRef<number | null>(null);
   const locationStateRef = useRef<LiveLocationState | null>(null);
   const centerOnNextLocationRef = useRef(false);
+  const deviceHeadingRef = useRef<number | null>(null);
+  const orientationCleanupRef = useRef<(() => void) | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
   // Stable refs so event handlers always see current prop values
@@ -601,6 +590,52 @@ export function MapView({
     }
   }
 
+  async function startDeviceHeadingTracking() {
+    if (typeof window === "undefined" || orientationCleanupRef.current) return;
+
+    type IOSDeviceOrientationEvent = typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<"granted" | "denied">;
+    };
+
+    const OrientationCtor = window.DeviceOrientationEvent as IOSDeviceOrientationEvent | undefined;
+    if (!OrientationCtor) return;
+
+    if (typeof OrientationCtor.requestPermission === "function") {
+      try {
+        const permission = await OrientationCtor.requestPermission();
+        if (permission !== "granted") return;
+      } catch {
+        return;
+      }
+    }
+
+    const handleOrientation = (event: DeviceOrientationEvent & { webkitCompassHeading?: number }) => {
+      let heading: number | null = null;
+
+      if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
+        heading = event.webkitCompassHeading;
+      } else if (event.absolute && typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
+        heading = (360 - event.alpha + 360) % 360;
+      }
+
+      deviceHeadingRef.current = heading;
+      if (heading !== null && locationStateRef.current) {
+        const nextState = { ...locationStateRef.current, heading };
+        locationStateRef.current = nextState;
+        updateLiveLocationVisual(nextState);
+      }
+    };
+
+    window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+    window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
+    orientationCleanupRef.current = () => {
+      window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+      window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
+      orientationCleanupRef.current = null;
+      deviceHeadingRef.current = null;
+    };
+  }
+
   function acceptLocationUpdate(pos: GeolocationPosition) {
     const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
     const prev = locationStateRef.current;
@@ -611,7 +646,9 @@ export function MapView({
     }
 
     let nextHeading = prev?.heading ?? null;
-    if (typeof heading === "number" && Number.isFinite(heading) && (speed ?? 0) > 0.5) {
+    if (deviceHeadingRef.current !== null) {
+      nextHeading = deviceHeadingRef.current;
+    } else if (typeof heading === "number" && Number.isFinite(heading) && (speed ?? 0) > 0.5) {
       nextHeading = heading;
     } else if (prev && movement >= 4) {
       nextHeading = bearingDegrees(prev.lat, prev.lng, lat, lng);
@@ -636,6 +673,7 @@ export function MapView({
 
     centerOnNextLocationRef.current = true;
     setIsTrackingLocation(true);
+    void startDeviceHeadingTracking();
 
     if (locationStateRef.current && mapInstanceRef.current) {
       const { lng, lat } = locationStateRef.current;
@@ -1065,6 +1103,7 @@ export function MapView({
         navigator.geolocation.clearWatch(locationWatchIdRef.current);
         locationWatchIdRef.current = null;
       }
+      orientationCleanupRef.current?.();
       locationMarkerRef.current?.remove();
       locationMarkerRef.current = null;
       shadowWorkerRef.current?.terminate();
