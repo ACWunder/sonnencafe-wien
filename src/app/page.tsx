@@ -351,25 +351,15 @@ const SmoothTimeSlider = memo(function SmoothTimeSlider({
           style={{
             left: thumbLeft,
             zIndex: 2,
-            width: 28,
-            height: 28,
+            width: 24,
+            height: 24,
             transform: "translate(-50%, -50%)",
-            border: "3px solid #fff7ed",
-            backgroundColor: "#f59e0b",
-            boxShadow: "0 0 0 1px rgba(194, 65, 12, 0.12), 0 12px 26px rgba(249, 115, 22, 0.34), 0 2px 8px rgba(194, 65, 12, 0.26)",
+            border: "3px solid rgba(255, 251, 235, 0.96)",
+            background: "radial-gradient(circle at 30% 30%, #fde68a 0%, #f59e0b 70%, #ea580c 100%)",
+            boxShadow: "0 10px 22px rgba(249, 115, 22, 0.28), 0 2px 6px rgba(194, 65, 12, 0.22)",
             pointerEvents: "none",
           }}
-        >
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "9999px",
-              backgroundColor: "#fff7ed",
-              boxShadow: "0 1px 2px rgba(120, 53, 15, 0.18)",
-            }}
-          />
-        </div>
+        />
       </div>
       <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
         <span>{formatMinuteLabel(min)}h</span>
