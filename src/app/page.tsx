@@ -468,6 +468,10 @@ export default function Home() {
 
       if (sortMode === "location" && userLocation) {
         return visible.sort((a, b) => {
+          const aSunny = (sunRemaining[a.id] ?? -1) >= 0;
+          const bSunny = (sunRemaining[b.id] ?? -1) >= 0;
+          if (aSunny !== bSunny) return aSunny ? -1 : 1;
+
           const distanceDiff =
             distanceMeters(userLocation.lat, userLocation.lng, a.lat, a.lng) -
             distanceMeters(userLocation.lat, userLocation.lng, b.lat, b.lng);
