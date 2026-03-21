@@ -1277,7 +1277,11 @@ function SelectedCafeCard({
               ? "bg-orange-100/80 text-orange-600"
               : "bg-zinc-100 text-zinc-500"
           }`}>
-            <span className="shrink-0 leading-none">☀️</span>
+            {isSunny ? (
+              <span className="shrink-0 leading-none">☀️</span>
+            ) : (
+              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-zinc-400" />
+            )}
             <span className="truncate">{sunLabel}</span>
           </div>
         </div>
