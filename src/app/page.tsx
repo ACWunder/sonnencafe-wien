@@ -842,8 +842,8 @@ export default function Home() {
                     />
                   </div>
                   <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
-                    <span>{formatMinuteLabel(sunriseTime)} h</span>
-                    <span>{formatMinuteLabel(sunsetTime)} h</span>
+                    <span>{formatMinuteLabel(sunriseTime)}h</span>
+                    <span>{formatMinuteLabel(sunsetTime)}h</span>
                   </div>
                 </div>
               </div>
