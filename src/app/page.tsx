@@ -221,13 +221,9 @@ export default function Home() {
   sunriseTimeRef.current = sunriseTime;
   const sunsetTimeRef = useRef(sunsetTime);
   sunsetTimeRef.current = sunsetTime;
-  // Uncontrolled slider — zero main-thread work during drag.
-  const sliderRef              = useRef<HTMLInputElement>(null);
-  const shadowRafRef           = useRef<number | null>(null);
-  const pendingShadowMinuteRef = useRef<number | null>(null);
-
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
+  const [selectedTime, setSelectedTime] = useState<number | null>(null);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -421,39 +417,28 @@ export default function Home() {
 
     setSunriseTime((prev) => (prev === nextSunrise ? prev : nextSunrise));
     setSunsetTime((prev) => (prev === nextSunset ? prev : nextSunset));
+    setSelectedTime((prev) => (prev === currentMinute ? prev : currentMinute));
   }, [timeState.date, sunLocation, timeState.time]);
 
-  // Sync slider DOM value when time changes externally (date change, etc.)
-  useEffect(() => {
-    if (!sliderRef.current || sunriseTime === null || sunsetTime === null) return;
-    sliderRef.current.value = String(clampMinute(timeToMinute(timeState.time), sunriseTime, sunsetTime));
-  }, [timeState.time, sunriseTime, sunsetTime]);
-
-  // RAF callback — fires at most once per frame, reads latest pending value.
-  // Stable (no deps) — reads everything from refs to avoid stale closures.
-  const flushShadowRaf = useCallback(() => {
-    shadowRafRef.current = null;
-    const v = pendingShadowMinuteRef.current;
-    if (v === null || sunriseTimeRef.current === null || sunsetTimeRef.current === null) return;
-    const nextTime = minuteToTime(clampMinute(v, sunriseTimeRef.current, sunsetTimeRef.current));
+  // Direct shadow update — bypasses React state for instant visual response.
+  const handleSliderShadow = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextTime = minuteToTime(clampMinute(minute, sunriseTime, sunsetTime));
     shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sunriseTime, sunsetTime]);
 
-  // Called once when the user releases the slider — commits time state.
-  const handleSliderCommit = useCallback((minute: number) => {
-    if (sunriseTimeRef.current === null || sunsetTimeRef.current === null) return;
-    // Cancel any pending shadow RAF — commit will fire it immediately
-    if (shadowRafRef.current !== null) {
-      cancelAnimationFrame(shadowRafRef.current);
-      shadowRafRef.current = null;
-    }
-    const nextTime = minuteToTime(clampMinute(minute, sunriseTimeRef.current, sunsetTimeRef.current));
-    shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
+  // React state update — setSelectedTime is urgent (slider thumb position),
+  // setTimeState + spinner are deferred so React can skip intermediate renders.
+  const handleSliderTimeChange = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
+    const nextTime = minuteToTime(nextMinute);
+    setSelectedTime(nextMinute);
     startTransition(() => {
       showSpinner();
       setTimeState((prev) => prev.time === nextTime ? prev : { ...prev, time: nextTime });
     });
-  }, [showSpinner]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sunriseTime, sunsetTime, showSpinner]);
 
   const filtered = useMemo(() => {
     const q = search.trim();
@@ -510,9 +495,9 @@ export default function Home() {
     const [h, m] = timeState.time.split(":").map(Number);
     return h * 60 + m;
   })();
-  const hasTimeSlider = sunriseTime !== null && sunsetTime !== null;
+  const hasTimeSlider = sunriseTime !== null && sunsetTime !== null && selectedTime !== null;
   const sliderMinute = hasTimeSlider
-    ? clampMinute(currentMinute, sunriseTime, sunsetTime)
+    ? clampMinute(selectedTime, sunriseTime, sunsetTime)
     : currentMinute;
 
   return (
@@ -839,19 +824,13 @@ export default function Home() {
                 <div className="rounded-[18px] border border-zinc-100 bg-white/90 px-2.5 py-0.5 shadow-lg shadow-zinc-200/40 backdrop-blur-xl">
                   <div className="pr-0">
                     <input
-                      ref={sliderRef}
                       type="range"
                       min={sunriseTime}
                       max={sunsetTime}
                       step={1}
-                      defaultValue={sliderMinute}
-                      onInput={(e) => {
-                        pendingShadowMinuteRef.current = Number((e.target as HTMLInputElement).value);
-                        if (shadowRafRef.current === null)
-                          shadowRafRef.current = requestAnimationFrame(flushShadowRaf);
-                      }}
-                      onPointerUp={(e) => handleSliderCommit(Number((e.target as HTMLInputElement).value))}
-                      onTouchEnd={(e) => handleSliderCommit(Number((e.currentTarget as HTMLInputElement).value))}
+                      value={sliderMinute}
+                      onInput={(e) => handleSliderShadow(Number((e.target as HTMLInputElement).value))}
+                      onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />
