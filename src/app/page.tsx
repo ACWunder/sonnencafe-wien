@@ -212,8 +212,6 @@ export default function Home() {
   const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
   const timeStateRef = useRef(timeState);
   timeStateRef.current = timeState;
-  const sunRemainingRef = useRef(sunRemaining);
-  sunRemainingRef.current = sunRemaining;
   const showSpinner = useCallback(() => {
     setIsCafeSymbolsUpdating(true);
   }, []);
@@ -230,6 +228,8 @@ export default function Home() {
   const closeTimerRef = useRef<number | null>(null);
   const [search, setSearch] = useState("");
   const [sunRemaining, setSunRemaining] = useState<Record<string, number | null>>({});
+  const sunRemainingRef = useRef(sunRemaining);
+  sunRemainingRef.current = sunRemaining;
   const [sunTimelines, setSunTimelines] = useState<SunTimelineData>({});
   const listRef = useRef<HTMLUListElement>(null);
 
