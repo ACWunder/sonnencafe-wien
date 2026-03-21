@@ -527,7 +527,15 @@ export function MapView({
         isBackgroundComputeRef.current = false;
 
         if (!wasBackground) {
-          onSunDataSettledRef.current?.();
+          // Wait for MapLibre to paint the updated dots before hiding the spinner.
+          // setData schedules a WebGL repaint via rAF; 'render' fires after it completes.
+          const m = mapInstanceRef.current;
+          if (m) {
+            m.once("render", () => onSunDataSettledRef.current?.());
+            m.triggerRepaint();
+          } else {
+            onSunDataSettledRef.current?.();
+          }
         }
 
         // Drain pending (time-change) request first; if none, run background batch
