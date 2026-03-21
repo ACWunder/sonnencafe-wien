@@ -634,8 +634,8 @@ export default function Home() {
           {/* Backdrop */}
           <div
             className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarOpen ? "opacity-100" : "opacity-0"}`}
-            onTouchEnd={(e) => { e.preventDefault(); setSidebarOpen(false); }}
-            onClick={() => setSidebarOpen(false)}
+            onTouchEnd={(e) => { e.preventDefault(); setSidebarOpen(false); (document.activeElement as HTMLElement)?.blur(); }}
+            onClick={() => { setSidebarOpen(false); (document.activeElement as HTMLElement)?.blur(); }}
           />
           {/* Panel */}
           <div
