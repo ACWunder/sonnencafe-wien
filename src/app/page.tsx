@@ -1225,12 +1225,12 @@ function SelectedCafeCard({
     <div className={`m-3 rounded-2xl overflow-hidden border border-zinc-100 shadow-xl shadow-zinc-200/40 shrink-0 bg-white relative cafe-card-enter${isClosing ? " cafe-card-leave" : ""}`}>
 
       {/* Card header */}
-      <div className={`grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] items-start gap-x-3 pl-4 pr-2 pt-4 pb-3.5 ${
+      <div className={`flex items-start pl-4 pr-2 pt-4 pb-3.5 ${
         isSunny
           ? "bg-gradient-to-b from-amber-100 via-amber-50 to-white"
           : "bg-gradient-to-b from-zinc-200 via-zinc-100 to-white"
       }`}>
-        <div className="min-w-0 pr-1">
+        <div className="min-w-0 flex-1 pr-2">
           <h2 className="font-display font-bold text-zinc-900 text-[16px] leading-[1.15] tracking-tight break-words">
             {cafe.name}
           </h2>
@@ -1242,19 +1242,19 @@ function SelectedCafeCard({
               </p>
             </div>
           )}
-        </div>
 
-        <div className="min-w-0 pt-0.5 pr-1 text-right">
-          {openStatus !== null && (
-            <div className="min-w-0">
-              <div
-                className={`text-[10px] font-body font-semibold leading-none ${
-                  openStatus ? "" : "text-red-400"
-                }`}
-                style={openStatus ? { color: "#00cd00" } : undefined}
-              >
-                {openStatus ? "Geoeffnet" : "Geschlossen"}
-              </div>
+          {(openStatus !== null || todayHours) && (
+            <div className="mt-1.5 min-w-0">
+              {openStatus !== null && (
+                <div
+                  className={`text-[10px] font-body font-semibold leading-none ${
+                    openStatus ? "" : "text-red-400"
+                  }`}
+                  style={openStatus ? { color: "#00cd00" } : undefined}
+                >
+                  {openStatus ? "Geoeffnet" : "Geschlossen"}
+                </div>
+              )}
               {todayHours && (
                 <div className="mt-1 text-[10px] font-body font-medium leading-[1.25] text-zinc-500 break-words">
                   {todayHours}
@@ -1262,23 +1262,7 @@ function SelectedCafeCard({
               )}
             </div>
           )}
-          {openStatus === null && todayHours && (
-            <div className="text-[10px] font-body font-medium leading-[1.25] text-zinc-500 break-words">
-              {todayHours}
-            </div>
-          )}
-        </div>
 
-        <button
-          onClick={handleClose}
-          className="shrink-0 -mr-0.5 -mt-0.5 ml-1 flex h-[48px] w-[48px] items-start justify-center pt-0.5 active:scale-90 transition-transform duration-100"
-        >
-          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-zinc-900/[0.07]">
-            <X className="w-[15px] h-[15px] text-zinc-500" strokeWidth={2.5} />
-          </span>
-        </button>
-
-        <div className="col-span-3 min-w-0">
           {/* Sun pill */}
           <div className={`inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-full font-body font-medium whitespace-nowrap max-w-full overflow-hidden text-[10.5px] ${
             isSunny
@@ -1289,6 +1273,15 @@ function SelectedCafeCard({
             <span className="truncate">{sunLabel}</span>
           </div>
         </div>
+
+        <button
+          onClick={handleClose}
+          className="shrink-0 -mr-0.5 -mt-0.5 ml-1 flex h-[48px] w-[48px] items-start justify-center pt-0.5 active:scale-90 transition-transform duration-100"
+        >
+          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-zinc-900/[0.07]">
+            <X className="w-[15px] h-[15px] text-zinc-500" strokeWidth={2.5} />
+          </span>
+        </button>
       </div>
 
       {/* Sun timeline */}
