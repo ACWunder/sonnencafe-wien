@@ -212,6 +212,8 @@ export default function Home() {
   const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
   const timeStateRef = useRef(timeState);
   timeStateRef.current = timeState;
+  const sunRemainingRef = useRef(sunRemaining);
+  sunRemainingRef.current = sunRemaining;
   const showSpinner = useCallback(() => {
     setIsCafeSymbolsUpdating(true);
   }, []);
@@ -485,7 +487,9 @@ export default function Home() {
     }
     // If it's a restaurant and restaurants are hidden, enable them
     if (!includeRestaurants && isRestaurantType(cafe.tags)) {
-      if (!filterChanged) showSpinner();
+      // Only show spinner if sun data isn't already computed for this café
+      const alreadyComputed = Object.prototype.hasOwnProperty.call(sunRemainingRef.current, cafe.id);
+      if (!filterChanged && !alreadyComputed) showSpinner();
       setIncludeRestaurants(true);
     }
   }, [visualDistricts, allDistricts, includeRestaurants]);
