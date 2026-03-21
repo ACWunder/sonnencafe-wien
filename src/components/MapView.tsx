@@ -258,7 +258,7 @@ export function MapView({
     }
   }
 
-  function scheduleSunDataRefresh(delay = 500) {
+  function scheduleSunDataRefresh(delay = 100) {
     clearScheduledSunData();
     sunDataTimeoutRef.current = window.setTimeout(() => {
       sunDataTimeoutRef.current = null;
@@ -526,26 +526,28 @@ export function MapView({
         const wasBackground = isBackgroundComputeRef.current;
         isBackgroundComputeRef.current = false;
 
-        if (!wasBackground) {
-          // Wait for MapLibre to fully process setData (async in its internal worker)
-          // and render the updated dots before hiding the spinner.
-          // 'idle' fires after all pending source updates and renders are settled.
-          const m = mapInstanceRef.current;
-          if (m) {
-            m.once("idle", () => onSunDataSettledRef.current?.());
-          } else {
-            onSunDataSettledRef.current?.();
-          }
-        }
-
-        // Drain pending (time-change) request first; if none, run background batch
+        // Drain pending (time-change) request first; if none, run background batch.
+        // IMPORTANT: only signal settled when there is no further pending compute —
+        // otherwise the first result (stale) would hide the spinner while the dots
+        // still show wrong data until the next compute finishes.
         const next = pendingSunComputeRef.current;
         pendingSunComputeRef.current = null;
         if (next) {
           pendingBackgroundRef.current = null; // stale background, discard
           sunComputeInFlightRef.current = true;
           sunWorker.postMessage({ type: "compute", cafes: next.cafes, date: next.date, time: next.time });
+          // Don't settle yet — another compute is in flight
         } else {
+          if (!wasBackground) {
+            // No more pending computes — dots are in their final correct state.
+            // Wait for MapLibre to finish rendering them before hiding the spinner.
+            const m = mapInstanceRef.current;
+            if (m) {
+              m.once("idle", () => onSunDataSettledRef.current?.());
+            } else {
+              onSunDataSettledRef.current?.();
+            }
+          }
           const bg = pendingBackgroundRef.current;
           if (bg) {
             pendingBackgroundRef.current = null;
