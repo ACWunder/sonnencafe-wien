@@ -1,6 +1,7 @@
 // src/app/page.tsx
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue, startTransition } from "react";
 import { format } from "date-fns";
 import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } from "lucide-react";
@@ -570,8 +571,8 @@ export default function Home() {
       <header className="bg-white/80 backdrop-blur-xl border-b border-zinc-100 px-3 py-2 flex items-center gap-2 shrink-0 z-10 overflow-hidden">
         {/* Brand */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shadow-amber-200">
-            <Sun className="w-4 h-4 text-white" strokeWidth={2.5} />
+          <div className="w-7 h-7 overflow-hidden rounded-[8px] shadow-sm shadow-amber-200 shrink-0">
+            <Image src="/icon.png" alt="" width={28} height={28} className="h-7 w-7 object-cover" />
           </div>
           <h1 className="font-display font-bold text-zinc-900 text-[13px] leading-none tracking-tight whitespace-nowrap">
             SunnyCorners Wien
@@ -698,8 +699,8 @@ export default function Home() {
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-[7px] bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                  <Sun className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+                <div className="w-6 h-6 overflow-hidden rounded-[7px] shrink-0">
+                  <Image src="/icon.png" alt="" width={24} height={24} className="h-6 w-6 object-cover" />
                 </div>
                 <span className="font-display font-bold text-zinc-900 text-[13px]">SunnyCorners Wien</span>
               </div>

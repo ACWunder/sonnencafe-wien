@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "SunnyCorners Wien",
+    name: "SunnyCorners",
     short_name: "SunnyCorners",
     description: "Finde sonnige Cafés in Wien – jetzt und zu jeder Uhrzeit",
     start_url: "/",
