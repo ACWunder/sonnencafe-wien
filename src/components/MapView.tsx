@@ -227,22 +227,69 @@ function createLocationPuck() {
     "pointer-events:none",
   ].join(";");
 
-  const cone = document.createElement("div");
+  const ns = "http://www.w3.org/2000/svg";
+  const cone = document.createElementNS(ns, "svg");
+  cone.setAttribute("viewBox", "0 0 52 52");
   cone.style.cssText = [
     "position:absolute",
     "left:50%",
     "top:50%",
-    "width:46px",
-    "height:46px",
-    "margin-left:-23px",
-    "margin-top:-23px",
-    "border-radius:9999px",
-    "background:conic-gradient(from 210deg, rgba(66,133,244,0) 0deg 100deg, rgba(66,133,244,0.3) 100deg 260deg, rgba(66,133,244,0) 260deg 360deg)",
-    "filter:blur(0.2px)",
+    "width:52px",
+    "height:52px",
+    "margin-left:-26px",
+    "margin-top:-26px",
     "transform-origin:50% 50%",
     "opacity:0",
     "transition:transform 180ms ease, opacity 180ms ease",
   ].join(";");
+
+  const defs = document.createElementNS(ns, "defs");
+
+  const gradient = document.createElementNS(ns, "linearGradient");
+  gradient.setAttribute("id", "location-cone-gradient");
+  gradient.setAttribute("x1", "26");
+  gradient.setAttribute("y1", "26");
+  gradient.setAttribute("x2", "26");
+  gradient.setAttribute("y2", "4");
+
+  const start = document.createElementNS(ns, "stop");
+  start.setAttribute("offset", "0%");
+  start.setAttribute("stop-color", "#4285f4");
+  start.setAttribute("stop-opacity", "0.16");
+  gradient.appendChild(start);
+
+  const mid = document.createElementNS(ns, "stop");
+  mid.setAttribute("offset", "55%");
+  mid.setAttribute("stop-color", "#4285f4");
+  mid.setAttribute("stop-opacity", "0.1");
+  gradient.appendChild(mid);
+
+  const end = document.createElementNS(ns, "stop");
+  end.setAttribute("offset", "100%");
+  end.setAttribute("stop-color", "#4285f4");
+  end.setAttribute("stop-opacity", "0");
+  gradient.appendChild(end);
+
+  const blur = document.createElementNS(ns, "filter");
+  blur.setAttribute("id", "location-cone-blur");
+  blur.setAttribute("x", "-30%");
+  blur.setAttribute("y", "-30%");
+  blur.setAttribute("width", "160%");
+  blur.setAttribute("height", "160%");
+  const gaussian = document.createElementNS(ns, "feGaussianBlur");
+  gaussian.setAttribute("stdDeviation", "1.4");
+  blur.appendChild(gaussian);
+
+  defs.appendChild(gradient);
+  defs.appendChild(blur);
+  cone.appendChild(defs);
+
+  const beam = document.createElementNS(ns, "path");
+  beam.setAttribute("d", "M26 26 L11.5 8.5 A24 24 0 0 1 40.5 8.5 Z");
+  beam.setAttribute("fill", "url(#location-cone-gradient)");
+  beam.setAttribute("filter", "url(#location-cone-blur)");
+  cone.appendChild(beam);
+
   root.appendChild(cone);
 
   const pulse = document.createElement("div");
@@ -306,7 +353,7 @@ export function MapView({
   const selectFromMapRef  = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const locationMarkerRef = useRef<any>(null);
-  const locationHeadingRef = useRef<HTMLDivElement | null>(null);
+  const locationHeadingRef = useRef<HTMLElement | SVGSVGElement | null>(null);
   const locationWatchIdRef = useRef<number | null>(null);
   const locationStateRef = useRef<LiveLocationState | null>(null);
   const centerOnNextLocationRef = useRef(false);
