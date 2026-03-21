@@ -687,11 +687,12 @@ export default function Home() {
                         setSidebarOpen(false);
                       }}
                       className={`w-full text-left px-3 py-2.5 transition-all duration-150 border-l-2 ${
-                        isSelected ? "bg-amber-50/60 border-amber-400" : "border-transparent hover:bg-zinc-50"
+                        isSelected
+                          ? isSunny ? "bg-amber-50/80 border-amber-400" : "bg-zinc-100/60 border-zinc-300"
+                          : isSunny ? "bg-amber-50/40 border-transparent hover:bg-amber-50/70" : "border-transparent hover:bg-zinc-50"
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
-                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 transition-colors duration-300 ${isSunny ? "bg-orange-400" : "bg-zinc-200"}`} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-baseline justify-between gap-2">
                             <p className={`text-[13px] font-body leading-snug truncate transition-colors ${isSelected ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
@@ -767,11 +768,12 @@ export default function Home() {
                   <button
                     onClick={() => setSelectedCafe(isSelected ? null : cafe)}
                     className={`w-full text-left px-3 py-2.5 transition-all duration-150 border-l-2 ${
-                      isSelected ? "bg-amber-50/60 border-amber-400" : "border-transparent hover:bg-zinc-50"
+                      isSelected
+                        ? isSunny ? "bg-amber-50/80 border-amber-400" : "bg-zinc-100/60 border-zinc-300"
+                        : isSunny ? "bg-amber-50/40 border-transparent hover:bg-amber-50/70" : "border-transparent hover:bg-zinc-50"
                     }`}
                   >
                     <div className="flex items-start gap-2.5">
-                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 transition-colors duration-300 ${isSunny ? "bg-orange-400" : "bg-zinc-200"}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <p className={`text-[13px] font-body leading-snug truncate transition-colors ${isSelected ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
