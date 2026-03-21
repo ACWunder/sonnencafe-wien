@@ -572,7 +572,7 @@ export default function Home() {
         {/* Brand */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-7 h-7 overflow-hidden rounded-[8px] shadow-sm shadow-amber-200 shrink-0">
-            <Image src="/icon.png" alt="" width={28} height={28} className="h-7 w-7 object-cover" />
+            <Image src="/sunnycorners-icon-v2.png" alt="" width={28} height={28} className="h-7 w-7 object-cover" />
           </div>
           <h1 className="font-display font-bold text-zinc-900 text-[13px] leading-none tracking-tight whitespace-nowrap">
             SunnyCorners Wien
@@ -700,7 +700,7 @@ export default function Home() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 overflow-hidden rounded-[7px] shrink-0">
-                  <Image src="/icon.png" alt="" width={24} height={24} className="h-6 w-6 object-cover" />
+                  <Image src="/sunnycorners-icon-v2.png" alt="" width={24} height={24} className="h-6 w-6 object-cover" />
                 </div>
                 <span className="font-display font-bold text-zinc-900 text-[13px]">SunnyCorners Wien</span>
               </div>
