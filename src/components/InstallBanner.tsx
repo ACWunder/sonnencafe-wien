@@ -42,7 +42,7 @@ export function InstallBanner() {
             </div>
             <div>
               <p className="font-display font-bold text-zinc-900 text-[14px] leading-tight">
-                Sonnencafe Wien
+                SunnyCorners Wien
               </p>
               <p className="text-[11px] text-zinc-600 font-body mt-0.5">
                 Finde Cafés in Wien, die jetzt oder später in der Sonne liegen.

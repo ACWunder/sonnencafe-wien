@@ -14,13 +14,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Sonnencafe Wien – Sonnige Cafés entdecken",
+  title: "SunnyCorners Wien – Sonnige Cafés entdecken",
   description:
-    "Welches Café in Wien liegt gerade in der Sonne? Sonnencafe zeigt dir in Echtzeit, wo du jetzt einen sonnigen Platz findest – für jeden Tag und jede Uhrzeit.",
+    "Welches Café in Wien liegt gerade in der Sonne? SunnyCorners zeigt dir in Echtzeit, wo du jetzt einen sonnigen Platz findest – für jeden Tag und jede Uhrzeit.",
   keywords: ["Wien", "Café", "Sonne", "Sonnig", "Schanigarten", "Vienna", "Kaffee", "Terrasse"],
-  authors: [{ name: "Sonnencafe Wien" }],
-  creator: "Sonnencafe Wien",
-  applicationName: "Sonnencafe Wien",
+  authors: [{ name: "SunnyCorners Wien" }],
+  creator: "SunnyCorners Wien",
+  applicationName: "SunnyCorners Wien",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -30,15 +30,15 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: "Sonnencafe Wien – Sonnige Cafés entdecken",
+    title: "SunnyCorners Wien – Sonnige Cafés entdecken",
     description: "Welches Café in Wien liegt gerade in der Sonne? Echtzeit-Schattenberechnung für Wien.",
     type: "website",
     locale: "de_AT",
-    siteName: "Sonnencafe Wien",
+    siteName: "SunnyCorners Wien",
   },
   twitter: {
     card: "summary",
-    title: "Sonnencafe Wien",
+    title: "SunnyCorners Wien",
     description: "Welches Café in Wien liegt gerade in der Sonne?",
   },
 };

@@ -574,7 +574,7 @@ export default function Home() {
             <Sun className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="font-display font-bold text-zinc-900 text-[13px] leading-none tracking-tight whitespace-nowrap">
-            Sonnencafe Wien
+            SunnyCorners Wien
           </h1>
         </div>
 
@@ -704,7 +704,7 @@ export default function Home() {
                 <div className="w-6 h-6 rounded-[7px] bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
                   <Sun className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="font-display font-bold text-zinc-900 text-[13px]">Sonnencafe Wien</span>
+                <span className="font-display font-bold text-zinc-900 text-[13px]">SunnyCorners Wien</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
