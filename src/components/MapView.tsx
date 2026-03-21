@@ -265,16 +265,16 @@ function loadSunEmoji(map: any, onReady: () => void) {
 function loadMoonEmoji(map: any) {
   if (map.hasImage("cafe-shady")) return;
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
+  canvas.width = 56;
+  canvas.height = 56;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = '46px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  ctx.fillText("🌑", 32, 34);
-  map.addImage("cafe-shady", ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 });
+  ctx.font = '40px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.fillText("🌑", 28, 30);
+  map.addImage("cafe-shady", ctx.getImageData(0, 0, 56, 56), { pixelRatio: 2 });
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -942,7 +942,7 @@ export function MapView({
             filter: ["all", ["==", ["get", "inShadow"], true], ["==", ["get", "isSelected"], false]],
             layout: {
               "icon-image": "cafe-shady",
-              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.64, 14, 0.8, 16, 0.96, 18, 1.12],
+              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.44, 14, 0.56, 16, 0.68, 18, 0.8],
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               "icon-anchor": "center",
@@ -972,7 +972,7 @@ export function MapView({
             filter: ["all", ["==", ["get", "inShadow"], true], ["==", ["get", "isSelected"], true]],
             layout: {
               "icon-image": "cafe-shady",
-              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.84, 14, 1.04, 16, 1.24, 18, 1.48],
+              "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.58, 14, 0.72, 16, 0.86, 18, 1.02],
               "icon-allow-overlap": true,
               "icon-ignore-placement": true,
               "icon-anchor": "center",
