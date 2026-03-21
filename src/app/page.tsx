@@ -217,8 +217,14 @@ export default function Home() {
   }, []);
   const [sunriseTime, setSunriseTime] = useState<number | null>(null);
   const [sunsetTime, setSunsetTime] = useState<number | null>(null);
+  const sunriseTimeRef = useRef(sunriseTime);
+  sunriseTimeRef.current = sunriseTime;
+  const sunsetTimeRef = useRef(sunsetTime);
+  sunsetTimeRef.current = sunsetTime;
   // Uncontrolled slider — zero main-thread work during drag.
-  const sliderRef = useRef<HTMLInputElement>(null);
+  const sliderRef              = useRef<HTMLInputElement>(null);
+  const shadowRafRef           = useRef<number | null>(null);
+  const pendingShadowMinuteRef = useRef<number | null>(null);
 
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
@@ -423,20 +429,31 @@ export default function Home() {
     sliderRef.current.value = String(clampMinute(timeToMinute(timeState.time), sunriseTime, sunsetTime));
   }, [timeState.time, sunriseTime, sunsetTime]);
 
-  // Called once when the user releases the slider.
-  // During drag: zero main-thread work so the thumb moves at native speed.
-  const handleSliderCommit = useCallback((minute: number) => {
-    if (sunriseTime === null || sunsetTime === null) return;
-    const clamped = clampMinute(minute, sunriseTime, sunsetTime);
-    const nextTime = minuteToTime(clamped);
-    // Shadow update (imperative, no React)
+  // RAF callback — fires at most once per frame, reads latest pending value.
+  // Stable (no deps) — reads everything from refs to avoid stale closures.
+  const flushShadowRaf = useCallback(() => {
+    shadowRafRef.current = null;
+    const v = pendingShadowMinuteRef.current;
+    if (v === null || sunriseTimeRef.current === null || sunsetTimeRef.current === null) return;
+    const nextTime = minuteToTime(clampMinute(v, sunriseTimeRef.current, sunsetTimeRef.current));
     shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
-    // State update (triggers café recompute + spinner)
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Called once when the user releases the slider — commits time state.
+  const handleSliderCommit = useCallback((minute: number) => {
+    if (sunriseTimeRef.current === null || sunsetTimeRef.current === null) return;
+    // Cancel any pending shadow RAF — commit will fire it immediately
+    if (shadowRafRef.current !== null) {
+      cancelAnimationFrame(shadowRafRef.current);
+      shadowRafRef.current = null;
+    }
+    const nextTime = minuteToTime(clampMinute(minute, sunriseTimeRef.current, sunsetTimeRef.current));
+    shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
     startTransition(() => {
       showSpinner();
       setTimeState((prev) => prev.time === nextTime ? prev : { ...prev, time: nextTime });
     });
-  }, [sunriseTime, sunsetTime, showSpinner]);
+  }, [showSpinner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = search.trim();
@@ -828,6 +845,11 @@ export default function Home() {
                       max={sunsetTime}
                       step={1}
                       defaultValue={sliderMinute}
+                      onInput={(e) => {
+                        pendingShadowMinuteRef.current = Number((e.target as HTMLInputElement).value);
+                        if (shadowRafRef.current === null)
+                          shadowRafRef.current = requestAnimationFrame(flushShadowRaf);
+                      }}
                       onPointerUp={(e) => handleSliderCommit(Number((e.target as HTMLInputElement).value))}
                       onTouchEnd={(e) => handleSliderCommit(Number((e.currentTarget as HTMLInputElement).value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
