@@ -186,6 +186,18 @@ function timeToMinute(time: string): number {
   return h * 60 + m;
 }
 
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
 function minuteToTime(minute: number): string {
   const h = Math.floor(minute / 60);
   const m = minute % 60;
@@ -238,6 +250,7 @@ export default function Home() {
   sunRemainingRef.current = sunRemaining;
   const [sunTimelines, setSunTimelines] = useState<SunTimelineData>({});
   const listRef = useRef<HTMLUListElement>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [showImpressum, setShowImpressum] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -449,10 +462,28 @@ export default function Home() {
   const filtered = useMemo(() => {
     const q = search.trim();
     if (!q) {
-      // No search: show only visible cafes sorted by sun remaining
-      return cafes
-        .filter((c) => visibleCafeIds.has(c.id))
-        .sort((a, b) => (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1));
+      const visible = cafes.filter((c) => visibleCafeIds.has(c.id));
+
+      if (userLocation) {
+        const nearbyThresholdM = 800;
+        return visible.sort((a, b) => {
+          const aSunny = (sunRemaining[a.id] ?? -1) >= 0;
+          const bSunny = (sunRemaining[b.id] ?? -1) >= 0;
+          const aNear = distanceMeters(userLocation.lat, userLocation.lng, a.lat, a.lng) <= nearbyThresholdM;
+          const bNear = distanceMeters(userLocation.lat, userLocation.lng, b.lat, b.lng) <= nearbyThresholdM;
+          const aSunnyNear = aSunny && aNear;
+          const bSunnyNear = bSunny && bNear;
+
+          if (aSunnyNear !== bSunnyNear) return aSunnyNear ? -1 : 1;
+          if (aSunny !== bSunny) return aSunny ? -1 : 1;
+          return a.name.localeCompare(b.name, "de");
+        });
+      }
+
+      return visible.sort((a, b) => {
+        const sunDiff = (sunRemaining[b.id] ?? -1) - (sunRemaining[a.id] ?? -1);
+        return sunDiff !== 0 ? sunDiff : a.name.localeCompare(b.name, "de");
+      });
     }
 
     // Search active: score across ALL cafes (ignore district/restaurant filter)
@@ -471,7 +502,7 @@ export default function Home() {
     const hasGoodMatch = scored.some(({ score }) => score >= 60);
     return (hasGoodMatch ? scored.filter(({ score }) => score >= 60) : scored)
       .map(({ cafe }) => cafe);
-  }, [cafes, visibleCafeIds, search, sunRemaining]);
+  }, [cafes, visibleCafeIds, search, sunRemaining, userLocation]);
 
   // Select a cafe and auto-adjust filters so it becomes visible on the map.
   const handleCafeSelect = useCallback((cafe: Cafe | null) => {
@@ -836,6 +867,7 @@ export default function Home() {
             cafes={deferredCafesForMap}
             visibleCafeIds={deferredVisibleCafeIds}
             sunRemaining={sunRemaining}
+            onUserLocationChange={setUserLocation}
             selectedCafe={selectedCafe}
             onCafeSelect={handleCafeSelect}
             onSunRemaining={handleSunRemaining}

@@ -102,6 +102,7 @@ interface MapViewProps {
   shadowHandleRef?: React.MutableRefObject<MapViewShadowHandle | null>;
   // Optional: subset of cafe IDs to show markers for (undefined = show all)
   visibleCafeIds?: Set<string>;
+  onUserLocationChange?: (location: { lat: number; lng: number } | null) => void;
 }
 
 // Sun computation has moved to src/workers/sun.worker.ts.
@@ -262,7 +263,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -564,6 +565,7 @@ export function MapView({
 
     const nextState: LiveLocationState = { lat, lng, accuracy };
     locationStateRef.current = nextState;
+    onUserLocationChange?.({ lat, lng });
     updateLiveLocationVisual(nextState);
 
     if (centerOnNextLocationRef.current && mapInstanceRef.current) {
@@ -1010,6 +1012,7 @@ export function MapView({
         navigator.geolocation.clearWatch(locationWatchIdRef.current);
         locationWatchIdRef.current = null;
       }
+      onUserLocationChange?.(null);
       locationMarkerRef.current?.remove();
       locationMarkerRef.current = null;
       shadowWorkerRef.current?.terminate();
