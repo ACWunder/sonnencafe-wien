@@ -158,16 +158,23 @@ self.onmessage = (e: MessageEvent) => {
     const dayDate     = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 12, 0, 0);
 
     const remaining: Record<string, number | null> = {};
-    const needTimelines = !timelineCache || timelineCache.date !== date;
+    const dateChanged = !timelineCache || timelineCache.date !== date;
     const freshTimelines: SunTimelineData = {};
 
     for (const cafe of cafes) {
       const nearby = grid?.getNearby(cafe.lat, cafe.lng) ?? allBuildings;
       remaining[cafe.id] = calcSunRemaining(cafe, currentDate, nearby);
-      if (needTimelines) freshTimelines[cafe.id] = calcDayTimeline(cafe, dayDate, nearby);
+      // Compute timeline if date changed OR this café isn't cached yet
+      if (dateChanged || !timelineCache!.timelines[cafe.id]) {
+        freshTimelines[cafe.id] = calcDayTimeline(cafe, dayDate, nearby);
+      }
     }
 
-    if (needTimelines) timelineCache = { date, timelines: freshTimelines };
+    if (dateChanged) {
+      timelineCache = { date, timelines: freshTimelines };
+    } else if (Object.keys(freshTimelines).length > 0) {
+      timelineCache = { date, timelines: { ...timelineCache!.timelines, ...freshTimelines } };
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (self as any).postMessage({
