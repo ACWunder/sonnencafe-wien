@@ -285,9 +285,11 @@ export function MapView({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const locationMarkerRef = useRef<any>(null);
   const locationWatchIdRef = useRef<number | null>(null);
+  const locationFeedbackTimeoutRef = useRef<number | null>(null);
   const locationStateRef = useRef<LiveLocationState | null>(null);
   const centerOnNextLocationRef = useRef(false);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
+  const [locationFeedback, setLocationFeedback] = useState<string | null>(null);
 
   // Stable refs so event handlers always see current prop values
   const cafesRef          = useRef<Cafe[]>(cafes);
@@ -582,15 +584,44 @@ export function MapView({
     }
   }
 
+  function showLocationFeedback(message: string) {
+    setLocationFeedback(message);
+    if (typeof window === "undefined") return;
+    if (locationFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(locationFeedbackTimeoutRef.current);
+    }
+    locationFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setLocationFeedback(null);
+      locationFeedbackTimeoutRef.current = null;
+    }, 4200);
+  }
+
+  function getGeolocationErrorMessage(error: GeolocationPositionError) {
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        return "Standort ist im Browser fuer diese Website blockiert.";
+      case error.POSITION_UNAVAILABLE:
+        return "Standort konnte gerade nicht ermittelt werden.";
+      case error.TIMEOUT:
+        return "Standortabfrage hat zu lange gedauert.";
+      default:
+        return "Standort konnte nicht gestartet werden.";
+    }
+  }
+
   function ensureLiveLocationWatch() {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     if (locationWatchIdRef.current !== null) return;
 
     locationWatchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => acceptLocationUpdate(pos),
-      () => {
+      (pos) => {
+        setLocationFeedback(null);
+        acceptLocationUpdate(pos);
+      },
+      (error) => {
         setIsTrackingLocation(false);
         locationWatchIdRef.current = null;
+        showLocationFeedback(getGeolocationErrorMessage(error));
       },
       {
         enableHighAccuracy: true,
@@ -601,10 +632,18 @@ export function MapView({
   }
 
   function startLiveLocationTracking() {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      showLocationFeedback("Standort geht im Browser nur ueber HTTPS oder localhost.");
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      showLocationFeedback("Dieser Browser unterstuetzt keinen Standortzugriff.");
+      return;
+    }
 
     centerOnNextLocationRef.current = true;
     setIsTrackingLocation(true);
+    setLocationFeedback(null);
 
     if (locationStateRef.current && mapInstanceRef.current) {
       const { lng, lat } = locationStateRef.current;
@@ -617,11 +656,13 @@ export function MapView({
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocationFeedback(null);
         acceptLocationUpdate(pos);
         ensureLiveLocationWatch();
       },
-      () => {
+      (error) => {
         setIsTrackingLocation(false);
+        showLocationFeedback(getGeolocationErrorMessage(error));
       },
       {
         enableHighAccuracy: true,
@@ -1098,6 +1139,14 @@ export function MapView({
 
   useEffect(() => clearScheduledSunData, []);
 
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && locationFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(locationFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // ── pan/zoom to selected café ─────────────────────────────────────────────
   // List selection zooms to 17; map click keeps current zoom.
   useEffect(() => {
@@ -1119,6 +1168,14 @@ export function MapView({
 
       {/* Compass + locate button stacked — bottom right */}
       <div className="absolute z-[500] flex flex-col gap-3 items-end" style={{ bottom: "24px", right: "16px" }}>
+        {locationFeedback ? (
+          <div
+            className="max-w-[240px] rounded-2xl border border-amber-200/70 bg-white/95 px-3 py-2 text-right text-[12px] leading-[1.35] text-zinc-700 shadow-lg shadow-zinc-300/30 backdrop-blur-xl"
+            style={{ marginRight: "5px" }}
+          >
+            {locationFeedback}
+          </div>
+        ) : null}
         <button
           onClick={startLiveLocationTracking}
           className={`w-[56px] h-[56px] rounded-full shadow-xl shadow-zinc-300/40 border flex items-center justify-center transition-colors ${
