@@ -216,6 +216,8 @@ function formatMinuteLabel(minute: number): string {
   }).format(new Date(2024, 5, 1, Math.floor(minute / 60), minute % 60));
 }
 
+const SLIDER_COMMIT_INTERVAL_MS = 90;
+
 export default function Home() {
   const sunLocation = DEFAULT_SUN_LOCATION;
   const [timeState, setTimeState] = useState<TimeState>(() => {
@@ -236,7 +238,14 @@ export default function Home() {
   sunsetTimeRef.current = sunsetTime;
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
-  const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  const [previewMinute, setPreviewMinute] = useState<number | null>(null);
+  const [isSliderDragging, setIsSliderDragging] = useState(false);
+  const sliderPreviewRafRef = useRef<number | null>(null);
+  const sliderPendingPreviewMinuteRef = useRef<number | null>(null);
+  const sliderCommitTimeoutRef = useRef<number | null>(null);
+  const sliderPendingCommittedMinuteRef = useRef<number | null>(null);
+  const sliderLastCommitAtRef = useRef(0);
+  const sliderLastSettledMinuteRef = useRef<number | null>(null);
   // Tracks whether the /api/cafes fetch has completed at least once.
   // Prevents the spinner disappearing when buildings load before cafes.
   const cafesLoadedRef = useRef(false);
@@ -435,32 +444,139 @@ export default function Home() {
     const times = getSunTimes(sunLocation[0], sunLocation[1], dayDate);
     const nextSunrise = times.sunrise.getHours() * 60 + times.sunrise.getMinutes();
     const nextSunset = times.sunset.getHours() * 60 + times.sunset.getMinutes();
-    const currentMinute = timeToMinute(timeState.time);
 
     setSunriseTime((prev) => (prev === nextSunrise ? prev : nextSunrise));
     setSunsetTime((prev) => (prev === nextSunset ? prev : nextSunset));
-    setSelectedTime((prev) => (prev === currentMinute ? prev : currentMinute));
   }, [timeState.date, sunLocation, timeState.time]);
 
-  // Direct shadow update — bypasses React state for instant visual response.
-  const handleSliderShadow = useCallback((minute: number) => {
-    if (sunriseTime === null || sunsetTime === null) return;
-    const nextTime = minuteToTime(clampMinute(minute, sunriseTime, sunsetTime));
-    shadowHandleRef.current?.updateShadow({ date: timeStateRef.current.date, time: nextTime });
-  }, [sunriseTime, sunsetTime]);
+  const committedMinute = timeToMinute(timeState.time);
+  const hasTimeSlider = sunriseTime !== null && sunsetTime !== null;
+  const sliderMinute = hasTimeSlider
+    ? clampMinute(previewMinute ?? committedMinute, sunriseTime, sunsetTime)
+    : committedMinute;
+  const displayTimeValue = hasTimeSlider ? minuteToTime(sliderMinute) : timeState.time;
 
-  // React state update — setSelectedTime is urgent (slider thumb position),
-  // setTimeState + spinner are deferred so React can skip intermediate renders.
-  const handleSliderTimeChange = useCallback((minute: number) => {
+  const queuePreviewMinute = useCallback((minute: number) => {
+    sliderPendingPreviewMinuteRef.current = minute;
+    if (sliderPreviewRafRef.current !== null || typeof window === "undefined") return;
+    sliderPreviewRafRef.current = window.requestAnimationFrame(() => {
+      sliderPreviewRafRef.current = null;
+      const nextMinute = sliderPendingPreviewMinuteRef.current;
+      sliderPendingPreviewMinuteRef.current = null;
+      if (nextMinute === null) return;
+      setPreviewMinute((prev) => (prev === nextMinute ? prev : nextMinute));
+    });
+  }, []);
+
+  const commitSliderMinute = useCallback((minute: number, flushImmediately = false) => {
     if (sunriseTime === null || sunsetTime === null) return;
     const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
     const nextTime = minuteToTime(nextMinute);
-    setSelectedTime(nextMinute);
-    startTransition(() => {
-      showSpinner();
-      setTimeState((prev) => prev.time === nextTime ? prev : { ...prev, time: nextTime });
-    });
-  }, [sunriseTime, sunsetTime, showSpinner]);
+    if (sliderLastSettledMinuteRef.current === nextMinute && timeStateRef.current.time === nextTime) return;
+
+    const applyCommit = () => {
+      setTimeState((prev) => (prev.time === nextTime ? prev : { ...prev, time: nextTime }));
+    };
+
+    sliderLastCommitAtRef.current = typeof performance !== "undefined" ? performance.now() : Date.now();
+    sliderLastSettledMinuteRef.current = nextMinute;
+
+    if (flushImmediately) {
+      applyCommit();
+      return;
+    }
+
+    startTransition(applyCommit);
+  }, [sunriseTime, sunsetTime]);
+
+  const flushScheduledSliderCommit = useCallback((flushImmediately = false) => {
+    if (sliderCommitTimeoutRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(sliderCommitTimeoutRef.current);
+      sliderCommitTimeoutRef.current = null;
+    }
+    const nextMinute = sliderPendingCommittedMinuteRef.current;
+    sliderPendingCommittedMinuteRef.current = null;
+    if (nextMinute === null) return;
+    commitSliderMinute(nextMinute, flushImmediately);
+  }, [commitSliderMinute]);
+
+  const scheduleSliderCommit = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
+    sliderPendingCommittedMinuteRef.current = nextMinute;
+
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = now - sliderLastCommitAtRef.current;
+    const remaining = Math.max(0, SLIDER_COMMIT_INTERVAL_MS - elapsed);
+
+    if (remaining === 0 && sliderCommitTimeoutRef.current === null) {
+      flushScheduledSliderCommit(false);
+      return;
+    }
+
+    if (sliderCommitTimeoutRef.current !== null || typeof window === "undefined") return;
+
+    sliderCommitTimeoutRef.current = window.setTimeout(() => {
+      sliderCommitTimeoutRef.current = null;
+      flushScheduledSliderCommit(false);
+    }, remaining || SLIDER_COMMIT_INTERVAL_MS);
+  }, [flushScheduledSliderCommit, sunriseTime, sunsetTime]);
+
+  const handleSliderInput = useCallback((minute: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
+    queuePreviewMinute(nextMinute);
+    scheduleSliderCommit(nextMinute);
+  }, [queuePreviewMinute, scheduleSliderCommit, sunriseTime, sunsetTime]);
+
+  const handleSliderDragStart = useCallback(() => {
+    setIsSliderDragging(true);
+  }, []);
+
+  const handleSliderDragEnd = useCallback((minute?: number) => {
+    if (sunriseTime === null || sunsetTime === null) return;
+    const finalMinute = clampMinute(
+      minute ?? sliderPendingPreviewMinuteRef.current ?? previewMinute ?? committedMinute,
+      sunriseTime,
+      sunsetTime,
+    );
+    setIsSliderDragging(false);
+    if (sliderCommitTimeoutRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(sliderCommitTimeoutRef.current);
+      sliderCommitTimeoutRef.current = null;
+    }
+    sliderPendingCommittedMinuteRef.current = null;
+    commitSliderMinute(finalMinute, true);
+    setPreviewMinute(null);
+  }, [
+    commitSliderMinute,
+    committedMinute,
+    previewMinute,
+    sunriseTime,
+    sunsetTime,
+  ]);
+
+  useEffect(() => {
+    if (isSliderDragging) return;
+    setPreviewMinute(null);
+  }, [isSliderDragging, timeState.time, timeState.date]);
+
+  useEffect(() => {
+    sliderLastSettledMinuteRef.current = committedMinute;
+  }, [committedMinute]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") {
+        if (sliderPreviewRafRef.current !== null) {
+          window.cancelAnimationFrame(sliderPreviewRafRef.current);
+        }
+        if (sliderCommitTimeoutRef.current !== null) {
+          window.clearTimeout(sliderCommitTimeoutRef.current);
+        }
+      }
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim();
@@ -554,14 +670,10 @@ export default function Home() {
     }
   }, [visualDistricts, allDistricts, includeRestaurants]);
 
-  const currentMinute = (() => {
-    const [h, m] = timeState.time.split(":").map(Number);
-    return h * 60 + m;
-  })();
-  const hasTimeSlider = sunriseTime !== null && sunsetTime !== null && selectedTime !== null;
-  const sliderMinute = hasTimeSlider
-    ? clampMinute(selectedTime, sunriseTime, sunsetTime)
-    : currentMinute;
+  const currentMinute = committedMinute;
+  const handleSunDataSettled = useCallback(() => {
+    if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false);
+  }, []);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7f6f3]">
@@ -592,7 +704,7 @@ export default function Home() {
         {/* Time */}
         <input
           type="time"
-          value={timeState.time}
+          value={displayTimeValue}
           onChange={(e) => {
             if (hasTimeSlider) return;
             showSpinner();
@@ -976,7 +1088,7 @@ export default function Home() {
             onSunRemaining={handleSunRemaining}
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
-            onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
+            onSunDataSettled={handleSunDataSettled}
           />
 
           {hasTimeSlider && (
@@ -990,8 +1102,14 @@ export default function Home() {
                       max={sunsetTime}
                       step={1}
                       value={sliderMinute}
-                      onInput={(e) => handleSliderShadow(Number((e.target as HTMLInputElement).value))}
-                      onChange={(e) => handleSliderTimeChange(Number(e.target.value))}
+                      onInput={(e) => handleSliderInput(Number(e.currentTarget.value))}
+                      onChange={(e) => handleSliderDragEnd(Number(e.target.value))}
+                      onPointerDown={handleSliderDragStart}
+                      onPointerUp={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
+                      onTouchStart={handleSliderDragStart}
+                      onTouchEnd={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
+                      onMouseDown={handleSliderDragStart}
+                      onMouseUp={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
                       className="sun-time-slider pointer-events-auto h-8 w-full"
                       aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
                     />

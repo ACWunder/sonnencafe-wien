@@ -1,7 +1,7 @@
 // src/components/MapView.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Cafe, TimeState, SunTimelineData } from "@/types";
 import { getSunPosition } from "@/lib/sun";
@@ -263,7 +263,7 @@ function loadSunEmoji(map: any, onReady: () => void) {
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export function MapView({
+export const MapView = memo(function MapView({
   timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
@@ -1140,7 +1140,8 @@ export function MapView({
       </div>
     </div>
   );
-}
+});
+MapView.displayName = "MapView";
 
 // ─── sun compass ──────────────────────────────────────────────────────────────
 function SunCompass({ timeState, onNorth }: { timeState: TimeState; onNorth?: () => void }) {
