@@ -539,14 +539,7 @@ export function MapView({
           // Don't settle yet — another compute is in flight
         } else {
           if (!wasBackground) {
-            // No more pending computes — dots are in their final correct state.
-            // Wait for MapLibre to finish rendering them before hiding the spinner.
-            const m = mapInstanceRef.current;
-            if (m) {
-              m.once("idle", () => onSunDataSettledRef.current?.());
-            } else {
-              onSunDataSettledRef.current?.();
-            }
+            onSunDataSettledRef.current?.();
           }
           const bg = pendingBackgroundRef.current;
           if (bg) {
