@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { X, Share, MoreVertical } from "lucide-react";
 
@@ -37,8 +38,8 @@ export function InstallBanner() {
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-200 shrink-0">
-              <span style={{ fontSize: 24 }}>☀️</span>
+            <div className="w-11 h-11 overflow-hidden rounded-2xl shadow-md shadow-amber-200 shrink-0">
+              <Image src="/sunnycorners-icon-v2.png" alt="" width={44} height={44} className="h-11 w-11 object-cover" />
             </div>
             <div>
               <p className="font-display font-bold text-zinc-900 text-[14px] leading-tight">
