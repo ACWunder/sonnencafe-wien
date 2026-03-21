@@ -577,9 +577,6 @@ export default function Home() {
             SunnyCorners Wien
           </h1>
         </div>
-
-        <div className="w-px h-4 bg-zinc-100 mx-0.5 shrink-0" />
-
         {/* Date */}
         <input
           type="date"
