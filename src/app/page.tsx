@@ -332,14 +332,31 @@ const SmoothTimeSlider = memo(function SmoothTimeSlider({
         className="sun-time-slider relative h-8 w-full cursor-pointer outline-none"
         style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
       >
-        <div className="absolute inset-x-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,#fde68a_0%,#fbbf24_45%,#f59e0b_100%)] shadow-[inset_0_1px_2px_rgba(120,53,15,0.14)]" />
         <div
-          className="absolute left-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(255,251,235,0.85)_0%,rgba(255,255,255,0.08)_100%)]"
-          style={{ width: thumbLeft }}
+          className="absolute inset-x-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full"
+          style={{
+            background: "linear-gradient(90deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%)",
+            boxShadow: "inset 0 1px 2px rgba(120, 53, 15, 0.14)",
+          }}
         />
         <div
-          className="absolute top-1/2 h-6 w-6 -translate-y-1/2 rounded-full border-[3px] border-[rgba(255,251,235,0.96)] bg-[radial-gradient(circle_at_30%_30%,#fde68a_0%,#f59e0b_70%,#ea580c_100%)] shadow-[0_10px_22px_rgba(249,115,22,0.28),0_2px_6px_rgba(194,65,12,0.22)]"
-          style={{ left: thumbLeft, transform: "translate(-50%, -50%)" }}
+          className="absolute left-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full"
+          style={{
+            width: thumbLeft,
+            background: "linear-gradient(90deg, rgba(255, 251, 235, 0.85) 0%, rgba(255, 255, 255, 0.08) 100%)",
+          }}
+        />
+        <div
+          className="absolute top-1/2 h-6 w-6 rounded-full"
+          style={{
+            left: thumbLeft,
+            zIndex: 2,
+            transform: "translate(-50%, -50%)",
+            border: "3px solid rgba(255, 251, 235, 0.96)",
+            background: "radial-gradient(circle at 30% 30%, #fde68a 0%, #f59e0b 70%, #ea580c 100%)",
+            boxShadow: "0 10px 22px rgba(249, 115, 22, 0.28), 0 2px 6px rgba(194, 65, 12, 0.22)",
+            pointerEvents: "none",
+          }}
         />
       </div>
       <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
