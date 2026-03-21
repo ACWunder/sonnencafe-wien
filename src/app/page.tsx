@@ -2,7 +2,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue, startTransition } from "react";
+import { memo, useState, useEffect, useMemo, useRef, useCallback, useDeferredValue, startTransition } from "react";
 import { format } from "date-fns";
 import { Sun, Search, MapPin, X, ExternalLink, Info, Menu, SlidersHorizontal } from "lucide-react";
 import type { Cafe, TimeState, SunTimeline, SunTimelineData } from "@/types";
@@ -216,7 +216,140 @@ function formatMinuteLabel(minute: number): string {
   }).format(new Date(2024, 5, 1, Math.floor(minute / 60), minute % 60));
 }
 
-const SLIDER_COMMIT_INTERVAL_MS = 90;
+const SLIDER_COMMIT_INTERVAL_MS = 120;
+
+const SmoothTimeSlider = memo(function SmoothTimeSlider({
+  min,
+  max,
+  committedMinute,
+  onPreviewMinuteChange,
+  onMinuteChange,
+  onMinuteCommit,
+}: {
+  min: number;
+  max: number;
+  committedMinute: number;
+  onPreviewMinuteChange: (minute: number) => void;
+  onMinuteChange: (minute: number) => void;
+  onMinuteCommit: (minute: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [localMinute, setLocalMinute] = useState(committedMinute);
+  const localMinuteRef = useRef(committedMinute);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    if (draggingRef.current) return;
+    localMinuteRef.current = committedMinute;
+    setLocalMinute(committedMinute);
+    onPreviewMinuteChange(committedMinute);
+  }, [committedMinute, onPreviewMinuteChange]);
+
+  const applyMinute = useCallback((nextMinute: number, commitFinal = false) => {
+    const clamped = clampMinute(nextMinute, min, max);
+    if (localMinuteRef.current !== clamped) {
+      localMinuteRef.current = clamped;
+      setLocalMinute(clamped);
+      onPreviewMinuteChange(clamped);
+    }
+    onMinuteChange(clamped);
+    if (commitFinal) onMinuteCommit(clamped);
+  }, [max, min, onMinuteChange, onMinuteCommit, onPreviewMinuteChange]);
+
+  const updateFromClientX = useCallback((clientX: number, commitFinal = false) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const nextMinute = Math.round(min + ratio * (max - min));
+    applyMinute(nextMinute, commitFinal);
+  }, [applyMinute, max, min]);
+
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    draggingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateFromClientX(event.clientX);
+  }, [updateFromClientX]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    event.preventDefault();
+    updateFromClientX(event.clientX);
+  }, [updateFromClientX]);
+
+  const finishPointer = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    event.preventDefault();
+    draggingRef.current = false;
+    updateFromClientX(event.clientX, true);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, [updateFromClientX]);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    let delta = 0;
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") delta = -1;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") delta = 1;
+    if (event.key === "PageDown") delta = -15;
+    if (event.key === "PageUp") delta = 15;
+    if (event.key === "Home") {
+      event.preventDefault();
+      applyMinute(min, true);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      applyMinute(max, true);
+      return;
+    }
+    if (delta === 0) return;
+    event.preventDefault();
+    applyMinute(localMinuteRef.current + delta, true);
+  }, [applyMinute, max, min]);
+
+  const ratio = max === min ? 0 : (localMinute - min) / (max - min);
+  const thumbLeft = `${ratio * 100}%`;
+
+  return (
+    <div className="rounded-[18px] border border-zinc-100 bg-white/90 px-2.5 py-0.5 shadow-lg shadow-zinc-200/40 backdrop-blur-xl">
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={localMinute}
+        aria-valuetext={minuteToTime(localMinute)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointer}
+        onPointerCancel={finishPointer}
+        onKeyDown={handleKeyDown}
+        className="sun-time-slider relative h-8 w-full cursor-pointer outline-none"
+        style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
+      >
+        <div className="absolute inset-x-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,#fde68a_0%,#fbbf24_45%,#f59e0b_100%)] shadow-[inset_0_1px_2px_rgba(120,53,15,0.14)]" />
+        <div
+          className="absolute left-0 top-1/2 h-[10px] -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(255,251,235,0.85)_0%,rgba(255,255,255,0.08)_100%)]"
+          style={{ width: thumbLeft }}
+        />
+        <div
+          className="absolute top-1/2 h-6 w-6 -translate-y-1/2 rounded-full border-[3px] border-[rgba(255,251,235,0.96)] bg-[radial-gradient(circle_at_30%_30%,#fde68a_0%,#f59e0b_70%,#ea580c_100%)] shadow-[0_10px_22px_rgba(249,115,22,0.28),0_2px_6px_rgba(194,65,12,0.22)]"
+          style={{ left: thumbLeft, transform: "translate(-50%, -50%)" }}
+        />
+      </div>
+      <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
+        <span>{formatMinuteLabel(min)}h</span>
+        <span>{formatMinuteLabel(max)}h</span>
+      </div>
+    </div>
+  );
+});
+SmoothTimeSlider.displayName = "SmoothTimeSlider";
 
 export default function Home() {
   const sunLocation = DEFAULT_SUN_LOCATION;
@@ -236,12 +369,9 @@ export default function Home() {
   sunriseTimeRef.current = sunriseTime;
   const sunsetTimeRef = useRef(sunsetTime);
   sunsetTimeRef.current = sunsetTime;
+  const timeInputRef = useRef<HTMLInputElement>(null);
   // Imperative handle to trigger shadow updates without going through React state.
   const shadowHandleRef = useRef<MapViewShadowHandle | null>(null);
-  const [previewMinute, setPreviewMinute] = useState<number | null>(null);
-  const [isSliderDragging, setIsSliderDragging] = useState(false);
-  const sliderPreviewRafRef = useRef<number | null>(null);
-  const sliderPendingPreviewMinuteRef = useRef<number | null>(null);
   const sliderCommitTimeoutRef = useRef<number | null>(null);
   const sliderPendingCommittedMinuteRef = useRef<number | null>(null);
   const sliderLastCommitAtRef = useRef(0);
@@ -451,22 +581,6 @@ export default function Home() {
 
   const committedMinute = timeToMinute(timeState.time);
   const hasTimeSlider = sunriseTime !== null && sunsetTime !== null;
-  const sliderMinute = hasTimeSlider
-    ? clampMinute(previewMinute ?? committedMinute, sunriseTime, sunsetTime)
-    : committedMinute;
-  const displayTimeValue = hasTimeSlider ? minuteToTime(sliderMinute) : timeState.time;
-
-  const queuePreviewMinute = useCallback((minute: number) => {
-    sliderPendingPreviewMinuteRef.current = minute;
-    if (sliderPreviewRafRef.current !== null || typeof window === "undefined") return;
-    sliderPreviewRafRef.current = window.requestAnimationFrame(() => {
-      sliderPreviewRafRef.current = null;
-      const nextMinute = sliderPendingPreviewMinuteRef.current;
-      sliderPendingPreviewMinuteRef.current = null;
-      if (nextMinute === null) return;
-      setPreviewMinute((prev) => (prev === nextMinute ? prev : nextMinute));
-    });
-  }, []);
 
   const commitSliderMinute = useCallback((minute: number, flushImmediately = false) => {
     if (sunriseTime === null || sunsetTime === null) return;
@@ -522,55 +636,26 @@ export default function Home() {
     }, remaining || SLIDER_COMMIT_INTERVAL_MS);
   }, [flushScheduledSliderCommit, sunriseTime, sunsetTime]);
 
-  const handleSliderInput = useCallback((minute: number) => {
-    if (sunriseTime === null || sunsetTime === null) return;
-    const nextMinute = clampMinute(minute, sunriseTime, sunsetTime);
-    queuePreviewMinute(nextMinute);
-    scheduleSliderCommit(nextMinute);
-  }, [queuePreviewMinute, scheduleSliderCommit, sunriseTime, sunsetTime]);
-
-  const handleSliderDragStart = useCallback(() => {
-    setIsSliderDragging(true);
+  const handleSliderPreviewMinute = useCallback((minute: number) => {
+    const input = timeInputRef.current;
+    if (!input) return;
+    const nextTime = minuteToTime(minute);
+    if (input.value !== nextTime) input.value = nextTime;
   }, []);
-
-  const handleSliderDragEnd = useCallback((minute?: number) => {
-    if (sunriseTime === null || sunsetTime === null) return;
-    const finalMinute = clampMinute(
-      minute ?? sliderPendingPreviewMinuteRef.current ?? previewMinute ?? committedMinute,
-      sunriseTime,
-      sunsetTime,
-    );
-    setIsSliderDragging(false);
-    if (sliderCommitTimeoutRef.current !== null && typeof window !== "undefined") {
-      window.clearTimeout(sliderCommitTimeoutRef.current);
-      sliderCommitTimeoutRef.current = null;
-    }
-    sliderPendingCommittedMinuteRef.current = null;
-    commitSliderMinute(finalMinute, true);
-    setPreviewMinute(null);
-  }, [
-    commitSliderMinute,
-    committedMinute,
-    previewMinute,
-    sunriseTime,
-    sunsetTime,
-  ]);
-
-  useEffect(() => {
-    if (isSliderDragging) return;
-    setPreviewMinute(null);
-  }, [isSliderDragging, timeState.time, timeState.date]);
 
   useEffect(() => {
     sliderLastSettledMinuteRef.current = committedMinute;
   }, [committedMinute]);
 
   useEffect(() => {
+    const input = timeInputRef.current;
+    if (!input) return;
+    if (input.value !== timeState.time) input.value = timeState.time;
+  }, [timeState.time]);
+
+  useEffect(() => {
     return () => {
       if (typeof window !== "undefined") {
-        if (sliderPreviewRafRef.current !== null) {
-          window.cancelAnimationFrame(sliderPreviewRafRef.current);
-        }
         if (sliderCommitTimeoutRef.current !== null) {
           window.clearTimeout(sliderCommitTimeoutRef.current);
         }
@@ -703,8 +788,9 @@ export default function Home() {
 
         {/* Time */}
         <input
+          ref={timeInputRef}
           type="time"
-          value={displayTimeValue}
+          defaultValue={timeState.time}
           onChange={(e) => {
             if (hasTimeSlider) return;
             showSpinner();
@@ -1094,31 +1180,14 @@ export default function Home() {
           {hasTimeSlider && (
             <div className="pointer-events-none absolute left-3 right-3 top-3 z-[620] md:top-3">
               <div className="min-w-0">
-                <div className="rounded-[18px] border border-zinc-100 bg-white/90 px-2.5 py-0.5 shadow-lg shadow-zinc-200/40 backdrop-blur-xl">
-                  <div className="pr-0">
-                    <input
-                      type="range"
-                      min={sunriseTime}
-                      max={sunsetTime}
-                      step={1}
-                      value={sliderMinute}
-                      onInput={(e) => handleSliderInput(Number(e.currentTarget.value))}
-                      onChange={(e) => handleSliderDragEnd(Number(e.target.value))}
-                      onPointerDown={handleSliderDragStart}
-                      onPointerUp={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
-                      onTouchStart={handleSliderDragStart}
-                      onTouchEnd={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
-                      onMouseDown={handleSliderDragStart}
-                      onMouseUp={(e) => handleSliderDragEnd(Number(e.currentTarget.value))}
-                      className="sun-time-slider pointer-events-auto h-8 w-full"
-                      aria-label="Uhrzeit zwischen Sonnenaufgang und Sonnenuntergang"
-                    />
-                  </div>
-                  <div className="-mt-3 flex items-center justify-between px-0.5 text-[11px] font-medium text-orange-500/95">
-                    <span>{formatMinuteLabel(sunriseTime)}h</span>
-                    <span>{formatMinuteLabel(sunsetTime)}h</span>
-                  </div>
-                </div>
+                <SmoothTimeSlider
+                  min={sunriseTime}
+                  max={sunsetTime}
+                  committedMinute={committedMinute}
+                  onPreviewMinuteChange={handleSliderPreviewMinute}
+                  onMinuteChange={scheduleSliderCommit}
+                  onMinuteCommit={commitSliderMinute}
+                />
               </div>
             </div>
           )}
