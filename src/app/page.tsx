@@ -1239,15 +1239,15 @@ function SelectedCafeCard({
           </span>
         </button>
 
-        <div className="min-w-0 pr-14">
+        <div className="min-w-0">
           <h2 className="font-display font-bold text-zinc-900 text-[16px] leading-[1.15] tracking-tight break-words">
-            {cafe.name}
+            <span className="block pr-14">{cafe.name}</span>
           </h2>
 
           {(openStatus !== null || todayHours) && (
-            <div className="mt-0.5 min-w-0">
+            <div className="mt-1 min-w-0">
               <div
-                className={`text-[10px] font-body font-semibold leading-[1.1] break-words ${
+                className={`text-[10px] font-body font-semibold leading-[1.1] ${
                   openStatus === false ? "text-red-400" : ""
                 }`}
                 style={openStatus === true ? { color: "#00cd00" } : openStatus === null ? { color: "#71717a" } : undefined}
