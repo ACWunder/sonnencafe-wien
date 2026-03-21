@@ -667,8 +667,18 @@ export default function Home() {
                   placeholder="Café suchen…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-base font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
+                  className="w-full pl-9 pr-9 py-2 text-base font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
                 />
+                {search && (
+                  <button
+                    type="button"
+                    aria-label="Suche leeren"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <p className="text-[10px] text-zinc-300 mt-1.5 font-body px-0.5">
                 {filtered.length} {filtered.length === 1 ? "Café" : "Cafés"}
@@ -753,8 +763,18 @@ export default function Home() {
                 placeholder="Café suchen…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-[13px] font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
+                className="w-full pl-9 pr-9 py-2 text-[13px] font-body text-zinc-700 rounded-xl bg-zinc-50 border border-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-all placeholder:text-zinc-300"
               />
+              {search && (
+                <button
+                  type="button"
+                  aria-label="Suche leeren"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-zinc-500 focus:outline-none focus:text-zinc-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
             <p className="text-[10px] text-zinc-300 mt-1.5 font-body px-0.5">
               {filtered.length} {filtered.length === 1 ? "Café" : "Cafés"}
