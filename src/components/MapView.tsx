@@ -237,8 +237,13 @@ export function MapView({
   // the React re-render cycle for instant slider response.
   const shadowUpdateFnRef = useRef<((ts: TimeState) => void) | null>(null);
   shadowUpdateFnRef.current = (ts: TimeState) => {
-    const all = Array.from(buildingCacheRef.current.values());
-    if (all.length > 0) updateShadowSource(all, ts);
+    if (shadowWorkerRef.current) {
+      // Worker path ignores allBuildings — skip Array.from to avoid main-thread allocation
+      updateShadowSource([], ts);
+    } else {
+      const all = Array.from(buildingCacheRef.current.values());
+      if (all.length > 0) updateShadowSource(all, ts);
+    }
   };
   if (shadowHandleRef) {
     shadowHandleRef.current = { updateShadow: shadowUpdateFnRef.current };
