@@ -512,7 +512,7 @@ export function MapView({
               geometry: { type: "Point", coordinates: [cafe.lng, cafe.lat] },
               properties: {
                 id: cafe.id, name: cafe.name,
-                inShadow: remaining[cafe.id] === null,
+                inShadow: shadowCacheRef.current.get(cafe.id) ?? true,
                 isSelected: cafe.id === selId,
               },
             })),

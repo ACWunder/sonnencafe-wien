@@ -362,7 +362,7 @@ export default function Home() {
   }, [timeState]);
 
   const handleSunRemaining = useCallback((data: Record<string, number | null>) => {
-    setSunRemaining(data);
+    setSunRemaining(prev => ({ ...prev, ...data }));
   }, []);
 
   const handleSunTimeline = useCallback((data: SunTimelineData) => {
