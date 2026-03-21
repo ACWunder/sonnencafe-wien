@@ -1137,7 +1137,7 @@ function SelectedCafeCard({
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-body font-semibold text-zinc-700 leading-none">In Google Maps öffnen</p>
+            <p className="text-[10px] font-body font-semibold text-zinc-700 leading-none">In Google Maps öffnen</p>
           </div>
           <ExternalLink className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-400 transition-colors shrink-0" />
         </a>
