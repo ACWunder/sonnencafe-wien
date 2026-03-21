@@ -86,7 +86,6 @@ interface LiveLocationState {
   lat: number;
   lng: number;
   accuracy: number;
-  heading: number | null;
 }
 
 interface MapViewProps {
@@ -222,85 +221,15 @@ function createLocationPuck() {
   const root = document.createElement("div");
   root.style.cssText = [
     "position:relative",
-    "width:48px",
-    "height:48px",
+    "width:18px",
+    "height:18px",
     "pointer-events:none",
   ].join(";");
 
-  const ns = "http://www.w3.org/2000/svg";
-  const cone = document.createElementNS(ns, "svg");
-  cone.setAttribute("viewBox", "0 0 52 52");
-  cone.style.cssText = [
-    "position:absolute",
-    "left:50%",
-    "top:50%",
-    "width:52px",
-    "height:52px",
-    "margin-left:-26px",
-    "margin-top:-26px",
-    "transform-origin:50% 50%",
-    "opacity:0",
-    "transition:transform 180ms ease, opacity 180ms ease",
-  ].join(";");
-
-  const defs = document.createElementNS(ns, "defs");
-
-  const gradient = document.createElementNS(ns, "linearGradient");
-  gradient.setAttribute("id", "location-cone-gradient");
-  gradient.setAttribute("x1", "26");
-  gradient.setAttribute("y1", "26");
-  gradient.setAttribute("x2", "26");
-  gradient.setAttribute("y2", "4");
-
-  const start = document.createElementNS(ns, "stop");
-  start.setAttribute("offset", "0%");
-  start.setAttribute("stop-color", "#4285f4");
-  start.setAttribute("stop-opacity", "0.16");
-  gradient.appendChild(start);
-
-  const mid = document.createElementNS(ns, "stop");
-  mid.setAttribute("offset", "55%");
-  mid.setAttribute("stop-color", "#4285f4");
-  mid.setAttribute("stop-opacity", "0.1");
-  gradient.appendChild(mid);
-
-  const end = document.createElementNS(ns, "stop");
-  end.setAttribute("offset", "100%");
-  end.setAttribute("stop-color", "#4285f4");
-  end.setAttribute("stop-opacity", "0");
-  gradient.appendChild(end);
-
-  const blur = document.createElementNS(ns, "filter");
-  blur.setAttribute("id", "location-cone-blur");
-  blur.setAttribute("x", "-30%");
-  blur.setAttribute("y", "-30%");
-  blur.setAttribute("width", "160%");
-  blur.setAttribute("height", "160%");
-  const gaussian = document.createElementNS(ns, "feGaussianBlur");
-  gaussian.setAttribute("stdDeviation", "1.4");
-  blur.appendChild(gaussian);
-
-  defs.appendChild(gradient);
-  defs.appendChild(blur);
-  cone.appendChild(defs);
-
-  const beam = document.createElementNS(ns, "path");
-  beam.setAttribute("d", "M26 26 L11.5 8.5 A24 24 0 0 1 40.5 8.5 Z");
-  beam.setAttribute("fill", "url(#location-cone-gradient)");
-  beam.setAttribute("filter", "url(#location-cone-blur)");
-  cone.appendChild(beam);
-
-  root.appendChild(cone);
-
   const pulse = document.createElement("div");
   pulse.style.cssText = [
-    "position:absolute",
-    "left:50%",
-    "top:50%",
     "width:18px",
     "height:18px",
-    "margin-left:-9px",
-    "margin-top:-9px",
     "border-radius:9999px",
     "background:#4285f4",
     "border:2.5px solid rgba(255,255,255,0.96)",
@@ -309,7 +238,7 @@ function createLocationPuck() {
   ].join(";");
   root.appendChild(pulse);
 
-  return { root, heading: cone };
+  return { root };
 }
 
 // Load Twemoji sun PNG and add as map image; calls onReady when done.
@@ -353,12 +282,9 @@ export function MapView({
   const selectFromMapRef  = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const locationMarkerRef = useRef<any>(null);
-  const locationHeadingRef = useRef<HTMLElement | SVGSVGElement | null>(null);
   const locationWatchIdRef = useRef<number | null>(null);
   const locationStateRef = useRef<LiveLocationState | null>(null);
   const centerOnNextLocationRef = useRef(false);
-  const deviceHeadingRef = useRef<number | null>(null);
-  const orientationCleanupRef = useRef<(() => void) | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
   // Stable refs so event handlers always see current prop values
@@ -613,22 +539,12 @@ export function MapView({
     if (!map || !mapReadyRef.current) return;
 
     if (!locationMarkerRef.current && maplibreRef.current) {
-      const { root, heading } = createLocationPuck();
-      locationHeadingRef.current = heading;
+      const { root } = createLocationPuck();
       locationMarkerRef.current = new maplibreRef.current.Marker({ element: root, anchor: "center" })
         .setLngLat([state.lng, state.lat])
         .addTo(map);
     } else {
       locationMarkerRef.current?.setLngLat([state.lng, state.lat]);
-    }
-
-    if (locationHeadingRef.current) {
-      if (state.heading === null) {
-        locationHeadingRef.current.style.opacity = "0";
-      } else {
-        locationHeadingRef.current.style.opacity = "1";
-        locationHeadingRef.current.style.transform = `rotate(${state.heading}deg)`;
-      }
     }
 
     const accuracySource = map.getSource("user-location-accuracy-source");
@@ -637,54 +553,8 @@ export function MapView({
     }
   }
 
-  async function startDeviceHeadingTracking() {
-    if (typeof window === "undefined" || orientationCleanupRef.current) return;
-
-    type IOSDeviceOrientationEvent = typeof DeviceOrientationEvent & {
-      requestPermission?: () => Promise<"granted" | "denied">;
-    };
-
-    const OrientationCtor = window.DeviceOrientationEvent as IOSDeviceOrientationEvent | undefined;
-    if (!OrientationCtor) return;
-
-    if (typeof OrientationCtor.requestPermission === "function") {
-      try {
-        const permission = await OrientationCtor.requestPermission();
-        if (permission !== "granted") return;
-      } catch {
-        return;
-      }
-    }
-
-    const handleOrientation = (event: DeviceOrientationEvent & { webkitCompassHeading?: number }) => {
-      let heading: number | null = null;
-
-      if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
-        heading = event.webkitCompassHeading;
-      } else if (event.absolute && typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
-        heading = (360 - event.alpha + 360) % 360;
-      }
-
-      deviceHeadingRef.current = heading;
-      if (heading !== null && locationStateRef.current) {
-        const nextState = { ...locationStateRef.current, heading };
-        locationStateRef.current = nextState;
-        updateLiveLocationVisual(nextState);
-      }
-    };
-
-    window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-    window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
-    orientationCleanupRef.current = () => {
-      window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-      window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
-      orientationCleanupRef.current = null;
-      deviceHeadingRef.current = null;
-    };
-  }
-
   function acceptLocationUpdate(pos: GeolocationPosition) {
-    const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
     const prev = locationStateRef.current;
     const movement = prev ? distanceMeters(prev.lat, prev.lng, lat, lng) : Infinity;
 
@@ -692,16 +562,7 @@ export function MapView({
       return;
     }
 
-    let nextHeading = prev?.heading ?? null;
-    if (deviceHeadingRef.current !== null) {
-      nextHeading = deviceHeadingRef.current;
-    } else if (typeof heading === "number" && Number.isFinite(heading) && (speed ?? 0) > 0.5) {
-      nextHeading = heading;
-    } else if (prev && movement >= 4) {
-      nextHeading = bearingDegrees(prev.lat, prev.lng, lat, lng);
-    }
-
-    const nextState: LiveLocationState = { lat, lng, accuracy, heading: nextHeading };
+    const nextState: LiveLocationState = { lat, lng, accuracy };
     locationStateRef.current = nextState;
     updateLiveLocationVisual(nextState);
 
@@ -720,7 +581,6 @@ export function MapView({
 
     centerOnNextLocationRef.current = true;
     setIsTrackingLocation(true);
-    void startDeviceHeadingTracking();
 
     if (locationStateRef.current && mapInstanceRef.current) {
       const { lng, lat } = locationStateRef.current;
@@ -1150,7 +1010,6 @@ export function MapView({
         navigator.geolocation.clearWatch(locationWatchIdRef.current);
         locationWatchIdRef.current = null;
       }
-      orientationCleanupRef.current?.();
       locationMarkerRef.current?.remove();
       locationMarkerRef.current = null;
       shadowWorkerRef.current?.terminate();
