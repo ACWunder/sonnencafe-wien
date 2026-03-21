@@ -79,7 +79,7 @@ function isOpenNow(oh: string | undefined, date: Date): boolean | null {
   return result;
 }
 
-/** Returns formatted hours for today, e.g. "9–18h" or "9:30–22h", null if unavailable */
+/** Returns formatted hours for today, e.g. "09:00–18:00h", null if unavailable */
 function getTodayHours(oh: string | undefined, date: Date): string | null {
   if (!oh) return null;
   const s = oh.trim();
@@ -97,14 +97,14 @@ function getTodayHours(oh: string | undefined, date: Date): string | null {
     if (!days.includes(dow)) continue;
     const timeSpec = m[2].trim().toLowerCase();
     if (timeSpec === "off") { result = null; continue; }
-    // Format first time range only: "09:00-18:00" → "9–18h"
+    // Format first time range only: "09:00-18:00" → "09:00–18:00h"
     const range = timeSpec.split(",")[0].trim();
     const parts = range.split("-");
     if (parts.length < 2) continue;
     const fmt = (t: string) => {
       const [h, m2] = t.trim().split(":").map(Number);
       if (isNaN(h)) return null;
-      return m2 ? `${h}:${String(m2).padStart(2, "0")}` : `${h}`;
+      return `${String(h).padStart(2, "0")}:${String(m2 || 0).padStart(2, "0")}`;
     };
     const start = fmt(parts[0]);
     const end = fmt(parts[1]);
@@ -1245,21 +1245,15 @@ function SelectedCafeCard({
 
           {(openStatus !== null || todayHours) && (
             <div className="mt-1.5 min-w-0">
-              {openStatus !== null && (
-                <div
-                  className={`text-[10px] font-body font-semibold leading-none ${
-                    openStatus ? "" : "text-red-400"
-                  }`}
-                  style={openStatus ? { color: "#00cd00" } : undefined}
-                >
-                  {openStatus ? "Geoeffnet" : "Geschlossen"}
-                </div>
-              )}
-              {todayHours && (
-                <div className="mt-1 text-[10px] font-body font-medium leading-[1.25] text-zinc-500 break-words">
-                  {todayHours}
-                </div>
-              )}
+              <div
+                className={`text-[10px] font-body font-semibold leading-[1.25] break-words ${
+                  openStatus === false ? "text-red-400" : ""
+                }`}
+                style={openStatus === true ? { color: "#00cd00" } : openStatus === null ? { color: "#71717a" } : undefined}
+              >
+                {openStatus !== null ? (openStatus ? "Geöffnet" : "Geschlossen") : null}
+                {todayHours ? `${openStatus !== null ? " · " : ""}${todayHours}` : null}
+              </div>
             </div>
           )}
 
