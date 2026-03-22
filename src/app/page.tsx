@@ -240,9 +240,6 @@ export default function Home() {
   // Tracks whether the /api/cafes fetch has completed at least once.
   // Prevents the spinner disappearing when buildings load before cafes.
   const cafesLoadedRef = useRef(false);
-  // True while background (full-Vienna) cafes are being merged — suppresses
-  // the spinner so silently-added outer-district cafés don't flash the loader.
-  const isBackgroundMergeRef = useRef(false);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -423,62 +420,19 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Merge cafes from a background fetch without triggering the spinner.
-  const mergeBackgroundCafes = useCallback((extra: Cafe[]) => {
-    if (extra.length === 0) return;
-    isBackgroundMergeRef.current = true;
-    setCafes((prev) => {
-      const seen = new Set(prev.map((c) => c.id));
-      const newOnes = extra.filter((c) => !seen.has(c.id));
-      return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-    });
-    // Clear flag after React has committed the update and any sun compute has started.
-    setTimeout(() => { isBackgroundMergeRef.current = false; }, 400);
+  // Load pre-generated static cafe list — instant from CDN, no Overpass at runtime.
+  // Falls back to the live API if the static file isn't present (e.g. dev without generation).
+  useEffect(() => {
+    fetch("/cafes.json")
+      .then((r) => { if (!r.ok) throw new Error("no static file"); return r.json(); })
+      .then((d) => { cafesLoadedRef.current = true; setCafes(d.cafes ?? []); })
+      .catch(() =>
+        fetch("/api/cafes")
+          .then((r) => r.json())
+          .then((d) => { cafesLoadedRef.current = true; setCafes(d.cafes ?? []); })
+          .catch(() => { cafesLoadedRef.current = true; })
+      );
   }, []);
-
-  // Phase 2 — full Vienna in background. Starts immediately so it's already
-  // in-flight when phase 1 (viewport) completes.
-  const fullViennaFetchRef = useRef<Promise<Cafe[]> | null>(null);
-  if (!fullViennaFetchRef.current) {
-    fullViennaFetchRef.current = fetch("/api/cafes")
-      .then((r) => r.json())
-      .then((d) => (d.cafes ?? []) as Cafe[])
-      .catch(() => [] as Cafe[]);
-  }
-
-  // Phase 1 — triggered by MapView once it knows the actual viewport bounds.
-  // Fetches only what's visible on screen → spinner clears fast.
-  const handleInitialBounds = useCallback((bounds: { south: number; north: number; west: number; east: number }) => {
-    const buf = 0.25;
-    const dLat = (bounds.north - bounds.south) * buf;
-    const dLng = (bounds.east  - bounds.west)  * buf;
-    // Clamp to Vienna outer envelope
-    const s = Math.max(bounds.south - dLat, 48.05).toFixed(5);
-    const n = Math.min(bounds.north + dLat, 48.42).toFixed(5);
-    const w = Math.max(bounds.west  - dLng, 16.08).toFixed(5);
-    const e = Math.min(bounds.east  + dLng, 16.78).toFixed(5);
-
-    fetch(`/api/cafes?bbox=${s},${w},${n},${e}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const viewport: Cafe[] = d.cafes ?? [];
-        cafesLoadedRef.current = true;
-        setCafes(viewport);
-
-        // Once viewport cafes are shown, silently merge the rest of Vienna.
-        fullViennaFetchRef.current!.then((all) => {
-          const seen = new Set(viewport.map((c) => c.id));
-          mergeBackgroundCafes(all.filter((c) => !seen.has(c.id)));
-        });
-      })
-      .catch(() => {
-        // Viewport fetch failed — fall back to full Vienna
-        cafesLoadedRef.current = true;
-        fullViennaFetchRef.current!.then((all) => {
-          if (all.length > 0) setCafes(all);
-        });
-      });
-  }, [mergeBackgroundCafes]);
 
   useEffect(() => {
     const dayDate = new Date(`${timeState.date}T12:00:00`);
@@ -1027,8 +981,7 @@ export default function Home() {
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
             onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
-            onSunComputeStarted={() => { if (cafesLoadedRef.current && !isBackgroundMergeRef.current) setIsCafeSymbolsUpdating(true); }}
-            onInitialBounds={handleInitialBounds}
+            onSunComputeStarted={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(true); }}
           />
 
           {hasTimeSlider && (
