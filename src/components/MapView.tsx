@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Cafe, TimeState, SunTimelineData } from "@/types";
 import { getSunPosition } from "@/lib/sun";
 import { calcShadowPolygon } from "@/lib/buildingShadow";
-import { DISTRICT_BOUNDS, MAP_CENTER } from "@/lib/mapConfig";
+import { VIENNA_BOUNDS, MAP_CENTER, MIN_MARKER_ZOOM, MIN_BUILDING_ZOOM, TILE_LAT, TILE_LNG, MAX_TILE_CACHE } from "@/lib/mapConfig";
 import type { BuildingFeature } from "@/app/api/buildings/route";
 
 // ─── spatial grid index ───────────────────────────────────────────────────────
@@ -52,24 +52,11 @@ const FALLBACK_HEIGHT = 18;
 // OpenFreeMap bright — free, no API key, Google-Maps-like colours
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
 
-// Shadow canvas: pre-rendered at a fixed resolution and fed to MapLibre as
-// a raster image source. A single ctx.fill() call on the full path produces
-// the union of all shadow polygons — overlapping areas are filled only once
-// so opacity never accumulates even where building shadows stack.
-//
-// Zoom-16 resolution so the canvas matches 1:1 at the most common viewing zoom,
-// giving crisp 1-pixel shadow edges. Combined with raster-resampling:"nearest"
-// on the raster layer this eliminates all bilinear blur.
-const _ZOOM16_PX  = (Math.pow(2, 16) * 256) / 360; // pixels per degree at zoom 16
-const SHADOW_W    = Math.ceil((DISTRICT_BOUNDS.east - DISTRICT_BOUNDS.west) * _ZOOM16_PX); // ~1966
-const SHADOW_H    = Math.ceil((DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * _ZOOM16_PX); // ~2560
-// MapLibre image-source corner order: top-left, top-right, bottom-right, bottom-left
-const SHADOW_COORDS: [[number,number],[number,number],[number,number],[number,number]] = [
-  [DISTRICT_BOUNDS.west, DISTRICT_BOUNDS.north],
-  [DISTRICT_BOUNDS.east, DISTRICT_BOUNDS.north],
-  [DISTRICT_BOUNDS.east, DISTRICT_BOUNDS.south],
-  [DISTRICT_BOUNDS.west, DISTRICT_BOUNDS.south],
-];
+// Shadow canvas: fixed 2048×2048 px offscreen canvas whose geographic extent
+// follows the current viewport + a 50% buffer. Dynamic bounds are passed to the
+// shadow worker per render; the MapLibre canvas source coordinates are updated
+// after each render so the raster image maps to the right geo area.
+const SHADOW_CANVAS_SIZE = 2048;
 
 const EMPTY_FEATURE_COLLECTION: { type: "FeatureCollection"; features: never[] } = {
   type: "FeatureCollection",
@@ -118,6 +105,7 @@ function renderShadowCanvas(
   canvas: HTMLCanvasElement,
   allBuildings: BuildingFeature[],
   timeState: TimeState,
+  bounds: { north: number; south: number; east: number; west: number },
 ) {
   const ctx    = canvas.getContext("2d")!;
   const date   = new Date(`${timeState.date}T${timeState.time}:00`);
@@ -131,6 +119,9 @@ function renderShadowCanvas(
     return;
   }
 
+  const bW = bounds.east - bounds.west;
+  const bH = bounds.north - bounds.south;
+
   ctx.beginPath();
   for (const b of allBuildings) {
     const shadow = calcShadowPolygon(
@@ -140,9 +131,8 @@ function renderShadowCanvas(
     if (shadow.length < 3) continue;
     let first = true;
     for (const [lat, lng] of shadow as [number, number][]) {
-      // Equirectangular projection — negligible error for a ~6 km area
-      const x = (lng - DISTRICT_BOUNDS.west)  / (DISTRICT_BOUNDS.east  - DISTRICT_BOUNDS.west)  * canvas.width;
-      const y = (DISTRICT_BOUNDS.north - lat)  / (DISTRICT_BOUNDS.north - DISTRICT_BOUNDS.south) * canvas.height;
+      const x = (lng - bounds.west) / bW * canvas.width;
+      const y = (bounds.north - lat) / bH * canvas.height;
       if (first) { ctx.moveTo(x, y); first = false; }
       else         ctx.lineTo(x, y);
     }
@@ -335,6 +325,16 @@ export function MapView({
   const pendingBackgroundRef   = useRef<{ cafes: Cafe[]; date: string; time: string } | null>(null);
   const isBackgroundComputeRef = useRef(false);
 
+  // Viewport-based shadow bounds — updated on every render dispatch
+  type Bounds = { north: number; south: number; east: number; west: number };
+  const shadowBoundsRef       = useRef<Bounds | null>(null);
+  const shadowRenderBoundsRef = useRef<Bounds | null>(null); // bounds used for in-flight render
+
+  // Tile LRU cache
+  const loadedTilesRef   = useRef<Set<string>>(new Set());          // tile keys fetched or in-flight
+  const tileBuildingsRef = useRef<Map<string, BuildingFeature[]>>(new Map()); // key → buildings
+  const tileOrderRef     = useRef<string[]>([]);                      // LRU order (oldest first)
+
   const [, setFetching]  = useState(false);
 
   // Internal ref always pointing to the latest shadow-update closure.
@@ -359,6 +359,64 @@ export function MapView({
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
+
+  // Viewport bounds + percentage buffer, clamped to Vienna's outer envelope.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function getViewportBounds(map: any, bufferFraction = 0.5) {
+    const b = map.getBounds();
+    const n = b.getNorth(), s = b.getSouth();
+    const e = b.getEast(),  w = b.getWest();
+    const dLat = (n - s) * bufferFraction;
+    const dLng = (e - w) * bufferFraction;
+    return {
+      north: Math.min(n + dLat, 48.42),
+      south: Math.max(s - dLat, 48.05),
+      east:  Math.min(e + dLng, 16.78),
+      west:  Math.max(w - dLng, 16.08),
+    };
+  }
+
+  // Return all tile keys that overlap the given bounds.
+  function getTilesForBounds(bounds: { north: number; south: number; east: number; west: number }): string[] {
+    const keys: string[] = [];
+    const r0 = Math.floor(bounds.south / TILE_LAT);
+    const r1 = Math.floor(bounds.north / TILE_LAT);
+    const c0 = Math.floor(bounds.west  / TILE_LNG);
+    const c1 = Math.floor(bounds.east  / TILE_LNG);
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++)
+        keys.push(`${r},${c}`);
+    return keys;
+  }
+
+  // Geographic bbox for a tile key (with a small overlap to catch edge buildings).
+  function tileBoundsForKey(key: string) {
+    const [r, c] = key.split(",").map(Number);
+    return {
+      south: r * TILE_LAT - 0.001,
+      north: (r + 1) * TILE_LAT + 0.001,
+      west:  c * TILE_LNG - 0.001,
+      east:  (c + 1) * TILE_LNG + 0.001,
+    };
+  }
+
+  // Move a tile to the "most recently used" end of the LRU list.
+  function touchTile(key: string) {
+    const idx = tileOrderRef.current.indexOf(key);
+    if (idx !== -1) tileOrderRef.current.splice(idx, 1);
+    tileOrderRef.current.push(key);
+  }
+
+  // Evict the least-recently-used tiles until we're under the cache limit.
+  function evictLruTiles() {
+    while (tileOrderRef.current.length > MAX_TILE_CACHE) {
+      const evictKey = tileOrderRef.current.shift()!;
+      const evicted  = tileBuildingsRef.current.get(evictKey);
+      if (evicted) for (const b of evicted) buildingCacheRef.current.delete(b.id);
+      tileBuildingsRef.current.delete(evictKey);
+      loadedTilesRef.current.delete(evictKey);
+    }
+  }
 
   function clearScheduledSunData() {
     if (sunDataTimeoutRef.current !== null) {
@@ -395,14 +453,19 @@ export function MapView({
   function dispatchShadowRender(ts: TimeState) {
     const worker = shadowWorkerRef.current;
     const canvas = shadowCanvasRef.current;
-    if (!worker || !canvas) return;
+    const map    = mapInstanceRef.current;
+    if (!worker || !canvas || !map || !mapReadyRef.current) return;
+
+    const bounds = getViewportBounds(map, 0.5);
+    shadowBoundsRef.current       = bounds;
+    shadowRenderBoundsRef.current = bounds; // snapshot for onmessage handler
 
     shadowRenderInFlightRef.current = true;
     worker.postMessage({
       type: "render",
       timeState: ts,
-      bounds: DISTRICT_BOUNDS,
-      width: canvas.width,
+      bounds,
+      width:  canvas.width,
       height: canvas.height,
     });
   }
@@ -487,7 +550,8 @@ export function MapView({
     }
 
     // Fallback: render synchronously on main thread
-    renderShadowCanvas(canvas, allBuildings, ts);
+    const bounds = shadowBoundsRef.current ?? VIENNA_BOUNDS;
+    renderShadowCanvas(canvas, allBuildings, ts, bounds);
     map.triggerRepaint();
   }
 
@@ -496,43 +560,83 @@ export function MapView({
     updateCafesSource(false);
   }
 
-  function loadStaticBuildings() {
-    setFetching(true);
-    fetch("/buildings-cache.json")
-      .then((r) => r.json())
-      .then(({ buildings }: { buildings: BuildingFeature[] }) => {
-        buildings.forEach((b) => buildingCacheRef.current.set(b.id, b));
-        buildingGridRef.current = new BuildingGrid(buildings);
-        shadowWorkerRef.current?.postMessage({ type: "init", buildings });
-        sunWorkerRef.current?.postMessage({ type: "init", buildings });
+  // Fetch building tiles for the current viewport (plus buffer). Missing tiles are
+  // fetched in parallel via /api/buildings?bbox=…. Results are merged into
+  // buildingCacheRef and both workers are re-initialised with the full set.
+  async function loadTilesForViewport() {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReadyRef.current) return;
+    if (map.getZoom() < MIN_BUILDING_ZOOM) return;
 
-        const map = mapInstanceRef.current;
-        if (!map || !mapReadyRef.current) return;
+    const vpBounds = getViewportBounds(map, 0.5);
+    const tileKeys = getTilesForBounds(vpBounds);
 
-        // Push building polygons to the GeoJSON source.
-        // Filter out tiny footprints (< 80 m²) so small courtyards / sheds
-        // don't appear as gaps inside building blocks.
-        // Shadow computation still uses the full buildingCacheRef.
-        const source = map.getSource("buildings-source");
-        if (source) {
-          source.setData({
-            type: "FeatureCollection",
-            features: buildings
-              .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
-              .map((b) => ({
-                type: "Feature",
-                geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number,number][])] },
-                properties: { id: b.id },
-              })),
-          });
+    // Keep existing tiles fresh in LRU
+    for (const key of tileKeys) {
+      if (tileBuildingsRef.current.has(key)) touchTile(key);
+    }
+
+    const missing = tileKeys.filter((k) => !loadedTilesRef.current.has(k));
+    if (missing.length === 0) return;
+
+    // Mark as in-flight so concurrent calls don't double-fetch
+    for (const key of missing) loadedTilesRef.current.add(key);
+
+    const results = await Promise.allSettled(
+      missing.map(async (key) => {
+        const tb = tileBoundsForKey(key);
+        try {
+          const r = await fetch(`/api/buildings?bbox=${tb.south},${tb.west},${tb.north},${tb.east}`);
+          if (!r.ok) throw new Error(`${r.status}`);
+          const { buildings } = await r.json() as { buildings: BuildingFeature[] };
+          return { key, buildings };
+        } catch (err) {
+          loadedTilesRef.current.delete(key); // allow retry on next pan
+          throw err;
         }
-
-        // Build visual shadow layer and compute initial café statuses
-        updateShadowSource(buildings, timeStateRef.current);
-        updateCafesSource(true);
-        setFetching(false);
       })
-      .catch(() => setFetching(false));
+    );
+
+    let anyNew = false;
+    for (const res of results) {
+      if (res.status !== "fulfilled") continue;
+      const { key, buildings } = res.value;
+      tileBuildingsRef.current.set(key, buildings);
+      touchTile(key);
+      for (const b of buildings) buildingCacheRef.current.set(b.id, b);
+      anyNew = true;
+    }
+
+    evictLruTiles();
+    if (!anyNew || !mapReadyRef.current) return;
+
+    const allBuildings = Array.from(buildingCacheRef.current.values());
+
+    // Update spatial grid for sun-remaining checks
+    buildingGridRef.current = new BuildingGrid(allBuildings);
+
+    // Reinitialise workers with the merged building set
+    shadowWorkerRef.current?.postMessage({ type: "init", buildings: allBuildings });
+    sunWorkerRef.current?.postMessage({ type: "init", buildings: allBuildings });
+
+    // Push building footprints to the visual GeoJSON layer
+    const bldgSrc = mapInstanceRef.current?.getSource("buildings-source") as any;
+    if (bldgSrc) {
+      bldgSrc.setData({
+        type: "FeatureCollection",
+        features: allBuildings
+          .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+          .map((b) => ({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number, number][])] },
+            properties: { id: b.id },
+          })),
+      });
+    }
+
+    // Trigger shadow re-render and café sun recomputation
+    updateShadowSource([], timeStateRef.current);
+    updateCafesSource(true);
   }
 
   function loadGreenAreas() {
@@ -671,6 +775,21 @@ export function MapView({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
+
+        // Update the canvas source coordinates to match what was just rendered.
+        // Using the snapshotted bounds from when this render was dispatched avoids
+        // placing old canvas content at new viewport coordinates.
+        const rendered = shadowRenderBoundsRef.current;
+        if (rendered) {
+          const src = map.getSource("shadow-source") as any;
+          src?.setCoordinates([
+            [rendered.west, rendered.north],
+            [rendered.east, rendered.north],
+            [rendered.east, rendered.south],
+            [rendered.west, rendered.south],
+          ]);
+        }
+
         map.triggerRepaint();
 
         shadowRenderInFlightRef.current = false;
@@ -761,8 +880,8 @@ export function MapView({
         container: mapRef.current,
         style: MAP_STYLE,
         center: [MAP_CENTER[1], MAP_CENTER[0]], // MapLibre: [lng, lat]
-        zoom: 14,
-        minZoom: 12,
+        zoom: 13,
+        minZoom: 10,
         maxZoom: 19,
         attributionControl: false,
       });
@@ -807,9 +926,13 @@ export function MapView({
         // ── shadow canvas ──────────────────────────────────────────────────
 
         const shadowCanvas = document.createElement("canvas");
-        shadowCanvas.width  = SHADOW_W;
-        shadowCanvas.height = SHADOW_H;
+        shadowCanvas.width  = SHADOW_CANVAS_SIZE;
+        shadowCanvas.height = SHADOW_CANVAS_SIZE;
         shadowCanvasRef.current = shadowCanvas;
+
+        // Initial shadow viewport covers the starting map view + 50% buffer.
+        const initShadowBounds = getViewportBounds(map, 0.5);
+        shadowBoundsRef.current = initShadowBounds;
 
         // ── sources ────────────────────────────────────────────────────────
 
@@ -818,32 +941,18 @@ export function MapView({
           data: { type: "FeatureCollection", features: [] },
         });
 
-        // Static sunny-district overlay (amber rectangle over DISTRICT_BOUNDS)
-        map.addSource("sunny-overlay-source", {
-          type: "geojson",
-          data: {
-            type: "Feature",
-            geometry: {
-              type: "Polygon",
-              coordinates: [[
-                [DISTRICT_BOUNDS.west,  DISTRICT_BOUNDS.south],
-                [DISTRICT_BOUNDS.east,  DISTRICT_BOUNDS.south],
-                [DISTRICT_BOUNDS.east,  DISTRICT_BOUNDS.north],
-                [DISTRICT_BOUNDS.west,  DISTRICT_BOUNDS.north],
-                [DISTRICT_BOUNDS.west,  DISTRICT_BOUNDS.south],
-              ]],
-            },
-            properties: {},
-          },
-        });
-
-        // Shadow source: raster image from the offscreen canvas.
-        // Image sources avoid WebGL fill-opacity accumulation from overlapping polygons.
+        // Shadow source: offscreen canvas raster. Coordinates are updated after
+        // each render dispatch so the image always maps to the correct geo area.
         map.addSource("shadow-source", {
           type: "canvas",
           canvas: shadowCanvas,
           animate: true,
-          coordinates: SHADOW_COORDS,
+          coordinates: [
+            [initShadowBounds.west, initShadowBounds.north],
+            [initShadowBounds.east, initShadowBounds.north],
+            [initShadowBounds.east, initShadowBounds.south],
+            [initShadowBounds.west, initShadowBounds.south],
+          ],
         });
 
         map.addSource("buildings-source", {
@@ -868,13 +977,6 @@ export function MapView({
           type: "fill",
           source: "green-areas-source",
           paint: { "fill-color": "#aad3a0", "fill-opacity": 0.55 },
-        }, before);
-
-        map.addLayer({
-          id: "sunny-overlay",
-          type: "fill",
-          source: "sunny-overlay-source",
-          paint: { "fill-color": "#fde68a", "fill-opacity": 0.25 },
         }, before);
 
         // Raster shadow layer — opacity here is the only transparency applied;
@@ -1030,15 +1132,30 @@ export function MapView({
 
         // ── viewport events ───────────────────────────────────────────────
 
-        // Recompute viewport shadows and redraw café dots after any pan/zoom.
-        // Shadow visual layer needs no repositioning — MapLibre handles that.
+        // Toggle marker + shadow visibility based on zoom level.
+        const markerLayers = ["cafes", "cafes-sunny", "cafes-selected-shadow", "cafes-selected-sunny", "cafes-hit"];
+        const applyZoomVisibility = () => {
+          const zoom = map.getZoom();
+          const markerVis = zoom >= MIN_MARKER_ZOOM ? "visible" : "none";
+          const shadowVis = zoom >= MIN_BUILDING_ZOOM ? "visible" : "none";
+          for (const id of markerLayers) {
+            if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
+          }
+          if (map.getLayer("shadows")) map.setLayoutProperty("shadows", "visibility", shadowVis);
+        };
+        map.on("zoom", applyZoomVisibility);
+
+        // After any pan/zoom: refresh café dots, re-render shadow for new viewport,
+        // and load any building tiles that entered the viewport.
         map.on("moveend", () => {
           refreshViewportShadows();
+          updateShadowSource([], timeStateRef.current);
+          loadTilesForViewport();
         });
 
         // ── load data ─────────────────────────────────────────────────────
 
-        loadStaticBuildings();
+        loadTilesForViewport(); // async — fires and forgets; triggers shadow + sun on completion
         loadGreenAreas();
         if (locationStateRef.current) updateLiveLocationVisual(locationStateRef.current);
       });
@@ -1070,13 +1187,9 @@ export function MapView({
 
   // ── redraw when time changes ───────────────────────────────────────────────
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !mapReadyRef.current) return;
-    const all = Array.from(buildingCacheRef.current.values());
-    if (all.length === 0) return;
-
-    // Rebuild full visual shadow layer
-    updateShadowSource(all, timeState);
+    if (!mapInstanceRef.current || !mapReadyRef.current) return;
+    // Worker renders for current viewport; empty [] is fine — worker has its own building cache.
+    updateShadowSource([], timeState);
     scheduleSunDataRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeState]);
