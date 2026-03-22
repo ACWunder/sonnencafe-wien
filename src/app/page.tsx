@@ -977,6 +977,7 @@ export default function Home() {
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
             onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
+            onSunComputeStarted={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(true); }}
           />
 
           {hasTimeSlider && (

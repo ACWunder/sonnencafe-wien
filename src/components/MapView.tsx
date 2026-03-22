@@ -91,6 +91,8 @@ interface MapViewProps {
   // Optional: subset of cafe IDs to show markers for (undefined = show all)
   visibleCafeIds?: Set<string>;
   onUserLocationChange?: (location: { lat: number; lng: number } | null) => void;
+  // Called when a visible-cafe sun computation is about to start (use to show spinner)
+  onSunComputeStarted?: () => void;
 }
 
 // Sun computation has moved to src/workers/sun.worker.ts.
@@ -270,7 +272,7 @@ function loadMoonEmoji(map: any) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -310,6 +312,8 @@ export function MapView({
   onSunTimelineRef.current = onSunTimeline;
   const onSunDataSettledRef = useRef(onSunDataSettled);
   onSunDataSettledRef.current = onSunDataSettled;
+  const onSunComputeStartedRef = useRef(onSunComputeStarted);
+  onSunComputeStartedRef.current = onSunComputeStarted;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
@@ -529,6 +533,7 @@ export function MapView({
     }
 
     isBackgroundComputeRef.current = false;
+    if (!incrementalOnly) onSunComputeStartedRef.current?.();
     dispatchSunCompute(cafesToCompute, ts.date, ts.time);
   }
 
@@ -620,42 +625,42 @@ export function MapView({
     }
 
     evictLruTiles();
-    if (!anyNew || !mapReadyRef.current) return;
+    if (!mapReadyRef.current) return;
 
     const allBuildings = Array.from(buildingCacheRef.current.values());
-
-    // Update spatial grid for sun-remaining checks
     buildingGridRef.current = new BuildingGrid(allBuildings);
 
-    // Only send buildings within the current viewport to workers — sending the
-    // full cache (potentially 100k+ buildings across Vienna) would serialize a
-    // huge payload and crash low-memory devices. Shadow and sun computation only
-    // need buildings that are visible anyway.
+    // Always re-send viewport buildings to workers even when no new tiles were
+    // loaded — the viewport may have moved to a cached area whose buildings the
+    // shadow/sun workers haven't seen yet, causing shadows to be missing.
     const wb = getViewportBounds(map, 0.5);
     const vpBuildings = allBuildings.filter((b) => {
       const [bLat, bLng] = b.polygon[0];
       return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
     });
-
-    shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
-    sunWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
-
-    // Push building footprints to the visual GeoJSON layer
-    const bldgSrc = mapInstanceRef.current?.getSource("buildings-source") as any;
-    if (bldgSrc) {
-      bldgSrc.setData({
-        type: "FeatureCollection",
-        features: allBuildings
-          .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
-          .map((b) => ({
-            type: "Feature",
-            geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number, number][])] },
-            properties: { id: b.id },
-          })),
-      });
+    if (vpBuildings.length > 0) {
+      shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
+      sunWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
     }
 
-    // Trigger shadow re-render and café sun recomputation
+    // Update building footprint visuals only when new tiles arrived
+    if (anyNew) {
+      const bldgSrc = mapInstanceRef.current?.getSource("buildings-source") as any;
+      if (bldgSrc) {
+        bldgSrc.setData({
+          type: "FeatureCollection",
+          features: allBuildings
+            .filter((b) => polygonAreaM2(b.polygon as [number, number][]) >= 80)
+            .map((b) => ({
+              type: "Feature",
+              geometry: { type: "Polygon", coordinates: [polygonToGeoJSON(b.polygon as [number, number][])] },
+              properties: { id: b.id },
+            })),
+        });
+      }
+    }
+
+    // Always trigger shadow re-render and café sun recomputation
     updateShadowSource([], timeStateRef.current);
     updateCafesSource(true);
   }
