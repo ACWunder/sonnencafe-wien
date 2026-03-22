@@ -339,6 +339,7 @@ export function MapView({
   const tileBuildingsRef = useRef<Map<string, BuildingFeature[]>>(new Map()); // key → buildings
   const tileOrderRef     = useRef<string[]>([]);                      // LRU order (oldest first)
   const tileLoadTimerRef = useRef<number | null>(null);               // debounce tile loading on moveend
+  const sunWorkerNeedsInitRef = useRef(false);                        // dirty: viewport changed, send fresh init before next sun compute
 
   const [, setFetching]  = useState(false);
 
@@ -438,12 +439,32 @@ export function MapView({
     }, delay);
   }
 
+  // Send viewport buildings to the sun worker if the dirty flag is set.
+  // Calling this synchronously before postMessage("compute") guarantees the
+  // init message arrives first in the worker's message queue.
+  function maybeInitSunWorker(worker: Worker) {
+    if (!sunWorkerNeedsInitRef.current) return;
+    sunWorkerNeedsInitRef.current = false;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const wb = getViewportBounds(map, 0.5);
+    const vpBuildings = Array.from(buildingCacheRef.current.values()).filter((b) => {
+      const [bLat, bLng] = b.polygon[0];
+      return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
+    });
+    if (vpBuildings.length > 0) worker.postMessage({ type: "init", buildings: vpBuildings });
+  }
+
   // Dispatch a sun-compute job to the worker using pend-drop.
   // If a computation is already in flight, the new request is queued; once
   // the current one finishes the latest queued request is sent (stale ones dropped).
   function dispatchSunCompute(cafes: Cafe[], date: string, time: string) {
     const worker = sunWorkerRef.current;
     if (!worker) return;
+    // Always send a fresh init before compute when the viewport has shifted.
+    // Both messages are enqueued synchronously so the worker processes them
+    // in order — prevents the "all sunny" race when time changes mid-pan.
+    maybeInitSunWorker(worker);
     pendingSunComputeRef.current = { cafes, date, time };
     if (!sunComputeInFlightRef.current) {
       const next = pendingSunComputeRef.current;
@@ -583,7 +604,20 @@ export function MapView({
     }
 
     const missing = tileKeys.filter((k) => !loadedTilesRef.current.has(k));
-    if (missing.length === 0) return;
+    if (missing.length === 0) {
+      // All tiles cached: update shadow worker with current viewport buildings
+      // (shadow is viewport-based; worker may not have seen this area yet).
+      const allBuildings = Array.from(buildingCacheRef.current.values());
+      const wb = getViewportBounds(map, 0.5);
+      const vpBuildings = allBuildings.filter((b) => {
+        const [bLat, bLng] = b.polygon[0];
+        return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
+      });
+      if (vpBuildings.length > 0) shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
+      updateShadowSource([], timeStateRef.current);
+      // Sun dots are already correct (computed when tiles first loaded); no recompute needed.
+      return;
+    }
 
     // Mark as in-flight so concurrent calls don't double-fetch
     for (const key of missing) loadedTilesRef.current.add(key);
@@ -630,20 +664,17 @@ export function MapView({
     const allBuildings = Array.from(buildingCacheRef.current.values());
     buildingGridRef.current = new BuildingGrid(allBuildings);
 
-    // Always re-send viewport buildings to workers even when no new tiles were
-    // loaded — the viewport may have moved to a cached area whose buildings the
-    // shadow/sun workers haven't seen yet, causing shadows to be missing.
+    // New tiles arrived — send viewport buildings to shadow worker and mark sun
+    // worker dirty. The dirty flag ensures dispatchSunCompute sends a fresh
+    // init synchronously before the compute message, fixing the race where a
+    // time-change fires before tile loading completes.
     const wb = getViewportBounds(map, 0.5);
     const vpBuildings = allBuildings.filter((b) => {
       const [bLat, bLng] = b.polygon[0];
       return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
     });
-    if (vpBuildings.length > 0) {
-      shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
-      sunWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
-    }
+    if (vpBuildings.length > 0) shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
 
-    // Update building footprint visuals only when new tiles arrived
     if (anyNew) {
       const bldgSrc = mapInstanceRef.current?.getSource("buildings-source") as any;
       if (bldgSrc) {
@@ -658,11 +689,15 @@ export function MapView({
             })),
         });
       }
+      // Mark sun worker dirty: next dispatchSunCompute will send init first.
+      sunWorkerNeedsInitRef.current = true;
     }
 
-    // Always trigger shadow re-render and café sun recomputation
+    // Re-render shadow for new viewport.
     updateShadowSource([], timeStateRef.current);
-    updateCafesSource(true);
+    // Trigger sun recompute (spinner shown); dispatchSunCompute will send
+    // fresh init before the compute because sunWorkerNeedsInitRef is set.
+    if (anyNew) updateCafesSource(true);
   }
 
   function loadGreenAreas() {
@@ -880,6 +915,8 @@ export function MapView({
         pendingSunComputeRef.current = null;
         if (next) {
           pendingBackgroundRef.current = null; // stale background, discard
+          // Re-check dirty flag: viewport may have changed while previous compute was in flight.
+          maybeInitSunWorker(sunWorker);
           sunComputeInFlightRef.current = true;
           sunWorker.postMessage({ type: "compute", cafes: next.cafes, date: next.date, time: next.time });
           // Don't settle yet — another compute is in flight
@@ -1176,6 +1213,9 @@ export function MapView({
         // Tile loading is debounced so rapid panning/zooming doesn't fire many
         // parallel fetch storms before the user has settled on a position.
         map.on("moveend", () => {
+          // Viewport shifted: mark sun worker dirty so the next time-change
+          // compute sends fresh viewport buildings before running.
+          sunWorkerNeedsInitRef.current = true;
           refreshViewportShadows();
           updateShadowSource([], timeStateRef.current);
           if (tileLoadTimerRef.current !== null) window.clearTimeout(tileLoadTimerRef.current);
