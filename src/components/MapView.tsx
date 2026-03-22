@@ -96,6 +96,8 @@ interface MapViewProps {
   // Called once when the map finishes loading, with the actual initial viewport bounds.
   // Use this to start a targeted café fetch for exactly what is visible on screen.
   onInitialBounds?: (bounds: { south: number; north: number; west: number; east: number }) => void;
+  // Called whenever the map is panned/zoomed (after moveend). Use to lazily load cafes for new viewport.
+  onBoundsChange?: (bounds: { south: number; north: number; west: number; east: number }) => void;
 }
 
 // Sun computation has moved to src/workers/sun.worker.ts.
@@ -275,7 +277,7 @@ function loadMoonEmoji(map: any) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted, onInitialBounds,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted, onInitialBounds, onBoundsChange,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -319,6 +321,8 @@ export function MapView({
   onSunComputeStartedRef.current = onSunComputeStarted;
   const onInitialBoundsRef = useRef(onInitialBounds);
   onInitialBoundsRef.current = onInitialBounds;
+  const onBoundsChangeRef = useRef(onBoundsChange);
+  onBoundsChangeRef.current = onBoundsChange;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
@@ -1232,6 +1236,9 @@ export function MapView({
         // Tile loading is debounced so rapid panning/zooming doesn't fire many
         // parallel fetch storms before the user has settled on a position.
         map.on("moveend", () => {
+          // Notify page of new bounds so it can lazily merge cafes for new viewport.
+          const mb = map.getBounds();
+          onBoundsChangeRef.current?.({ south: mb.getSouth(), north: mb.getNorth(), west: mb.getWest(), east: mb.getEast() });
           // Viewport shifted: mark sun worker dirty so the next time-change
           // compute sends fresh viewport buildings before running.
           sunWorkerNeedsInitRef.current = true;

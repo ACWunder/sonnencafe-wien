@@ -261,6 +261,10 @@ export default function Home() {
   const cafesLoadedRef = useRef(false);
   // Suppresses spinner during silent background cafe merge.
   const isBackgroundMergeRef = useRef(false);
+  // Stores all cafes from cafes.json (not in state — used for lazy viewport loading).
+  const allCafesRef = useRef<Cafe[]>([]);
+  // IDs of cafes already added to state.
+  const loadedCafeIdsRef = useRef<Set<string>>(new Set());
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -441,32 +445,48 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Viewport-first cafe loading: set viewport cafes immediately (spinner goes away),
-  // then silently merge the rest in background without showing spinner.
+  // Helper: merge cafes for a viewport (with small buffer) into state silently.
+  const mergeCafesForBounds = useCallback((bounds: { south: number; north: number; west: number; east: number }) => {
+    const all = allCafesRef.current;
+    if (all.length === 0) return;
+    const buf = 0.15;
+    const dLat = (bounds.north - bounds.south) * buf;
+    const dLng = (bounds.east - bounds.west) * buf;
+    const newCafes = all.filter((c) =>
+      !loadedCafeIdsRef.current.has(c.id) &&
+      c.lat >= bounds.south - dLat && c.lat <= bounds.north + dLat &&
+      c.lng >= bounds.west  - dLng && c.lng <= bounds.east  + dLng
+    );
+    if (newCafes.length === 0) return;
+    for (const c of newCafes) loadedCafeIdsRef.current.add(c.id);
+    isBackgroundMergeRef.current = true;
+    setCafes((prev) => [...prev, ...newCafes]);
+    setTimeout(() => { isBackgroundMergeRef.current = false; }, 500);
+  }, []);
+
+  // Initial load: set ONLY viewport cafes → spinner clears, app becomes usable.
   const handleInitialBounds = useCallback((bounds: { south: number; north: number; west: number; east: number }) => {
     getCafesJson().then((all) => {
-      if (cafesLoadedRef.current) return; // already loaded
-      const buf = 0.5;
+      if (cafesLoadedRef.current) return;
+      allCafesRef.current = all;
+      const buf = 0.15;
       const dLat = (bounds.north - bounds.south) * buf;
       const dLng = (bounds.east - bounds.west) * buf;
       const vpCafes = all.filter((c) =>
         c.lat >= bounds.south - dLat && c.lat <= bounds.north + dLat &&
         c.lng >= bounds.west  - dLng && c.lng <= bounds.east  + dLng
       );
+      for (const c of vpCafes) loadedCafeIdsRef.current.add(c.id);
       cafesLoadedRef.current = true;
       setCafes(vpCafes);
-      // Background: merge remaining cafes without triggering spinner
-      const vpSet = new Set(vpCafes.map((c) => c.id));
-      const rest = all.filter((c) => !vpSet.has(c.id));
-      if (rest.length > 0) {
-        setTimeout(() => {
-          isBackgroundMergeRef.current = true;
-          setCafes((prev) => [...prev, ...rest]);
-          setTimeout(() => { isBackgroundMergeRef.current = false; }, 500);
-        }, 200);
-      }
     });
-  }, []);
+  }, [mergeCafesForBounds]);
+
+  // On pan/zoom: silently merge cafes for the new viewport area.
+  const handleBoundsChange = useCallback((bounds: { south: number; north: number; west: number; east: number }) => {
+    if (!cafesLoadedRef.current) return;
+    mergeCafesForBounds(bounds);
+  }, [mergeCafesForBounds]);
 
   useEffect(() => {
     const dayDate = new Date(`${timeState.date}T12:00:00`);
@@ -1017,6 +1037,7 @@ export default function Home() {
             onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
             onSunComputeStarted={() => { if (cafesLoadedRef.current && !isBackgroundMergeRef.current) setIsCafeSymbolsUpdating(true); }}
             onInitialBounds={handleInitialBounds}
+            onBoundsChange={handleBoundsChange}
           />
 
           {hasTimeSlider && (
