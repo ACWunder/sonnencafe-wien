@@ -1073,7 +1073,7 @@ export default function Home() {
                     {!visualDistricts || visualDistricts.size === allDistricts.length ? "Keine" : "Alle"}
                   </button>
                 </div>
-                <div className="pb-2">
+                <div className="pb-2 overflow-y-auto max-h-52">
                   {allDistricts.map((d) => {
                     const checked = visualDistricts ? visualDistricts.has(d) : true;
                     return (

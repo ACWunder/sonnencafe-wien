@@ -334,6 +334,7 @@ export function MapView({
   const loadedTilesRef   = useRef<Set<string>>(new Set());          // tile keys fetched or in-flight
   const tileBuildingsRef = useRef<Map<string, BuildingFeature[]>>(new Map()); // key → buildings
   const tileOrderRef     = useRef<string[]>([]);                      // LRU order (oldest first)
+  const tileLoadTimerRef = useRef<number | null>(null);               // debounce tile loading on moveend
 
   const [, setFetching]  = useState(false);
 
@@ -568,7 +569,7 @@ export function MapView({
     if (!map || !mapReadyRef.current) return;
     if (map.getZoom() < MIN_BUILDING_ZOOM) return;
 
-    const vpBounds = getViewportBounds(map, 0.5);
+    const vpBounds = getViewportBounds(map, 0.3);
     const tileKeys = getTilesForBounds(vpBounds);
 
     // Keep existing tiles fresh in LRU
@@ -626,9 +627,18 @@ export function MapView({
     // Update spatial grid for sun-remaining checks
     buildingGridRef.current = new BuildingGrid(allBuildings);
 
-    // Reinitialise workers with the merged building set
-    shadowWorkerRef.current?.postMessage({ type: "init", buildings: allBuildings });
-    sunWorkerRef.current?.postMessage({ type: "init", buildings: allBuildings });
+    // Only send buildings within the current viewport to workers — sending the
+    // full cache (potentially 100k+ buildings across Vienna) would serialize a
+    // huge payload and crash low-memory devices. Shadow and sun computation only
+    // need buildings that are visible anyway.
+    const wb = getViewportBounds(map, 0.5);
+    const vpBuildings = allBuildings.filter((b) => {
+      const [bLat, bLng] = b.polygon[0];
+      return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
+    });
+
+    shadowWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
+    sunWorkerRef.current?.postMessage({ type: "init", buildings: vpBuildings });
 
     // Push building footprints to the visual GeoJSON layer
     const bldgSrc = mapInstanceRef.current?.getSource("buildings-source") as any;
@@ -1158,10 +1168,16 @@ export function MapView({
 
         // After any pan/zoom: refresh café dots, re-render shadow for new viewport,
         // and load any building tiles that entered the viewport.
+        // Tile loading is debounced so rapid panning/zooming doesn't fire many
+        // parallel fetch storms before the user has settled on a position.
         map.on("moveend", () => {
           refreshViewportShadows();
           updateShadowSource([], timeStateRef.current);
-          loadTilesForViewport();
+          if (tileLoadTimerRef.current !== null) window.clearTimeout(tileLoadTimerRef.current);
+          tileLoadTimerRef.current = window.setTimeout(() => {
+            tileLoadTimerRef.current = null;
+            loadTilesForViewport();
+          }, 300);
         });
 
         // ── load data ─────────────────────────────────────────────────────
