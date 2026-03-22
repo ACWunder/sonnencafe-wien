@@ -98,6 +98,9 @@ interface MapViewProps {
   onInitialBounds?: (bounds: { south: number; north: number; west: number; east: number }) => void;
   // Called whenever the map is panned/zoomed (after moveend). Use to lazily load cafes for new viewport.
   onBoundsChange?: (bounds: { south: number; north: number; west: number; east: number }) => void;
+  // When true, a café list update is a silent background merge — use incremental sun compute
+  // so newly added cafés don't re-queue a foreground batch and block onSunDataSettled.
+  backgroundMerge?: boolean;
 }
 
 // Sun computation has moved to src/workers/sun.worker.ts.
@@ -277,7 +280,7 @@ function loadMoonEmoji(map: any) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted, onInitialBounds, onBoundsChange,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted, onInitialBounds, onBoundsChange, backgroundMerge,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1299,7 +1302,9 @@ export function MapView({
     // loadStaticBuildings() will call updateCafesSource(true) once ready,
     // preventing onSunDataSettled from firing before we have real building data.
     const buildingsReady = buildingCacheRef.current.size > 0;
-    updateCafesSource(buildingsReady);
+    // For background merges (lazy pan-loading), use incremental compute so new cafés
+    // don't queue a foreground batch that blocks onSunDataSettled / the spinner.
+    updateCafesSource(buildingsReady, backgroundMerge ?? false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cafes]);
 

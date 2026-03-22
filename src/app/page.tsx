@@ -259,7 +259,9 @@ export default function Home() {
   // Tracks whether the /api/cafes fetch has completed at least once.
   // Prevents the spinner disappearing when buildings load before cafes.
   const cafesLoadedRef = useRef(false);
-  // Suppresses spinner during silent background cafe merge.
+  // Suppresses spinner during silent background cafe merge. Also passed to MapView
+  // so useEffect([cafes]) uses incremental sun compute instead of full recompute.
+  const [isBackgroundMerge, setIsBackgroundMerge] = useState(false);
   const isBackgroundMergeRef = useRef(false);
   // Stores all cafes from cafes.json (not in state — used for lazy viewport loading).
   const allCafesRef = useRef<Cafe[]>([]);
@@ -459,9 +461,13 @@ export default function Home() {
     );
     if (newCafes.length === 0) return;
     for (const c of newCafes) loadedCafeIdsRef.current.add(c.id);
+    // React 18 batches these two updates into one render, so MapView sees
+    // backgroundMerge=true at the same time as the new cafes — triggering
+    // incremental sun compute instead of a full recompute that blocks the spinner.
     isBackgroundMergeRef.current = true;
+    setIsBackgroundMerge(true);
     setCafes((prev) => [...prev, ...newCafes]);
-    setTimeout(() => { isBackgroundMergeRef.current = false; }, 500);
+    setTimeout(() => { isBackgroundMergeRef.current = false; setIsBackgroundMerge(false); }, 100);
   }, []);
 
   // Initial load: set ONLY viewport cafes → spinner clears, app becomes usable.
@@ -1038,6 +1044,7 @@ export default function Home() {
             onSunComputeStarted={() => { if (cafesLoadedRef.current && !isBackgroundMergeRef.current) setIsCafeSymbolsUpdating(true); }}
             onInitialBounds={handleInitialBounds}
             onBoundsChange={handleBoundsChange}
+            backgroundMerge={isBackgroundMerge}
           />
 
           {hasTimeSlider && (
