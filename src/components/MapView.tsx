@@ -584,6 +584,17 @@ export function MapView({
 
     const results = await Promise.allSettled(
       missing.map(async (key) => {
+        // Static pre-generated tile (fast, no server round-trip to Overpass)
+        const staticKey = key.replace(",", "_");
+        try {
+          const r = await fetch(`/tiles/${staticKey}.json`);
+          if (r.ok) {
+            const { buildings } = await r.json() as { buildings: BuildingFeature[] };
+            return { key, buildings };
+          }
+        } catch { /* network error on static file — fall through to API */ }
+
+        // Fallback: live /api/buildings (for areas without pre-generated tiles)
         const tb = tileBoundsForKey(key);
         try {
           const r = await fetch(`/api/buildings?bbox=${tb.south},${tb.west},${tb.north},${tb.east}`);
