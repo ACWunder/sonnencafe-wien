@@ -93,6 +93,9 @@ interface MapViewProps {
   onUserLocationChange?: (location: { lat: number; lng: number } | null) => void;
   // Called when a visible-cafe sun computation is about to start (use to show spinner)
   onSunComputeStarted?: () => void;
+  // Called once when the map finishes loading, with the actual initial viewport bounds.
+  // Use this to start a targeted café fetch for exactly what is visible on screen.
+  onInitialBounds?: (bounds: { south: number; north: number; west: number; east: number }) => void;
 }
 
 // Sun computation has moved to src/workers/sun.worker.ts.
@@ -272,7 +275,7 @@ function loadMoonEmoji(map: any) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function MapView({
-  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted,
+  timeState, cafes, sunRemaining, selectedCafe, onCafeSelect, onSunRemaining, onSunTimeline, onSunDataSettled, shadowHandleRef, visibleCafeIds, onUserLocationChange, onSunComputeStarted, onInitialBounds,
 }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -314,6 +317,8 @@ export function MapView({
   onSunDataSettledRef.current = onSunDataSettled;
   const onSunComputeStartedRef = useRef(onSunComputeStarted);
   onSunComputeStartedRef.current = onSunComputeStarted;
+  const onInitialBoundsRef = useRef(onInitialBounds);
+  onInitialBoundsRef.current = onInitialBounds;
   const timeStateRef      = useRef(timeState);
   timeStateRef.current    = timeState;
   // Cache: cafe id → inShadow, so selection changes don't recompute shadows
@@ -961,6 +966,13 @@ export function MapView({
       map.on("load", () => {
         if (!mounted) return;
         mapReadyRef.current = true;
+
+        // Report the actual initial viewport so page.tsx can start a targeted café fetch.
+        const ib = map.getBounds();
+        onInitialBoundsRef.current?.({
+          south: ib.getSouth(), north: ib.getNorth(),
+          west: ib.getWest(),   east: ib.getEast(),
+        });
 
         // Find the first symbol layer in the base style (road/place labels, icons).
         // All our custom layers are inserted before it so labels always render on top.
