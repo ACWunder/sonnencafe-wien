@@ -439,20 +439,25 @@ export function MapView({
     }, delay);
   }
 
-  // Send viewport buildings to the sun worker if the dirty flag is set.
-  // Calling this synchronously before postMessage("compute") guarantees the
-  // init message arrives first in the worker's message queue.
+  // True if we have loaded building tiles for the area around this café.
+  // Cafés in unloaded tile areas must be skipped — the worker has no buildings
+  // for them and would compute them as sunny (no shadows), producing wrong results.
+  function isCafeTileLoaded(cafe: Cafe): boolean {
+    const r = Math.floor(cafe.lat / TILE_LAT);
+    const c = Math.floor(cafe.lng / TILE_LNG);
+    return tileBuildingsRef.current.has(`${r},${c}`);
+  }
+
+  // Send ALL cached buildings to the sun worker if the dirty flag is set.
+  // We must send the full cache (not just viewport) because updateCafesSource
+  // computes all district-filtered cafés, many of which are outside the viewport.
+  // Sending only viewport buildings causes every out-of-viewport café to appear
+  // sunny (worker finds no buildings near them → no shadow intersection).
   function maybeInitSunWorker(worker: Worker) {
     if (!sunWorkerNeedsInitRef.current) return;
     sunWorkerNeedsInitRef.current = false;
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    const wb = getViewportBounds(map, 0.5);
-    const vpBuildings = Array.from(buildingCacheRef.current.values()).filter((b) => {
-      const [bLat, bLng] = b.polygon[0];
-      return bLat >= wb.south && bLat <= wb.north && bLng >= wb.west && bLng <= wb.east;
-    });
-    if (vpBuildings.length > 0) worker.postMessage({ type: "init", buildings: vpBuildings });
+    const allBuildings = Array.from(buildingCacheRef.current.values());
+    if (allBuildings.length > 0) worker.postMessage({ type: "init", buildings: allBuildings });
   }
 
   // Dispatch a sun-compute job to the worker using pend-drop.
@@ -529,13 +534,15 @@ export function MapView({
     const ts = timeStateRef.current;
     // Phase 1: visible cafés → fast update for map + spinner.
     // Phase 2 (background): remaining cafés → fills sidebar/search results.
+    // Only compute cafés whose tile is loaded — cafés in unloaded areas have no
+    // buildings in the worker and would be incorrectly returned as sunny.
     const cafesToCompute = incrementalOnly
-      ? visibleCafes.filter((c) => !Object.prototype.hasOwnProperty.call(sunRemainingRef.current, c.id))
-      : visibleCafes;
+      ? visibleCafes.filter((c) => isCafeTileLoaded(c) && !Object.prototype.hasOwnProperty.call(sunRemainingRef.current, c.id))
+      : visibleCafes.filter(isCafeTileLoaded);
 
     if (!incrementalOnly) {
       const visibleIds = new Set(visibleCafes.map((c) => c.id));
-      const bgCafes = cafesRef.current.filter((c) => !visibleIds.has(c.id));
+      const bgCafes = cafesRef.current.filter((c) => !visibleIds.has(c.id) && isCafeTileLoaded(c));
       pendingBackgroundRef.current = bgCafes.length > 0
         ? { cafes: bgCafes, date: ts.date, time: ts.time }
         : null;
