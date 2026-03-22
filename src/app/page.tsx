@@ -421,11 +421,26 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/cafes")
+    // Phase 1: inner districts 1–9 only → fast, clears the loading spinner.
+    fetch("/api/cafes?area=inner")
       .then((r) => r.json())
       .then((d) => {
         cafesLoadedRef.current = true;
-        setCafes(d.cafes ?? []);
+        const inner: Cafe[] = d.cafes ?? [];
+        setCafes(inner);
+
+        // Phase 2: full Vienna in background → merge by ID (no duplicates).
+        fetch("/api/cafes")
+          .then((r) => r.json())
+          .then((d2) => {
+            const all: Cafe[] = d2.cafes ?? [];
+            if (all.length > inner.length) {
+              const seen = new Set(inner.map((c) => c.id));
+              const extra = all.filter((c) => !seen.has(c.id));
+              if (extra.length > 0) setCafes((prev) => [...prev, ...extra]);
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => { cafesLoadedRef.current = true; });
   }, []);

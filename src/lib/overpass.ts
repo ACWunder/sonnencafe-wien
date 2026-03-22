@@ -14,8 +14,18 @@ export const VIENNA_BBOX = {
 
 export const VIENNA_FULL_BBOX = VIENNA_BBOX;
 
-export function buildOverpassQuery(): string {
-  const bbox = `${VIENNA_FULL_BBOX.south},${VIENNA_FULL_BBOX.west},${VIENNA_FULL_BBOX.north},${VIENNA_FULL_BBOX.east}`;
+// Approximate bounding box for districts 1–9 (inner Vienna / Gürtel area)
+export const INNER_DISTRICTS_BBOX = {
+  south: 48.170,
+  north: 48.240,
+  west:  16.300,
+  east:  16.415,
+};
+
+type BBox = { south: number; north: number; west: number; east: number };
+
+export function buildOverpassQuery(area: BBox = VIENNA_FULL_BBOX): string {
+  const bbox = `${area.south},${area.west},${area.north},${area.east}`;
 
   // Cast the net wide:
   // 1. amenity=cafe (standard)
@@ -58,8 +68,8 @@ out body qt;
   `.trim();
 }
 
-export async function fetchCafesFromOverpass(): Promise<Cafe[]> {
-  const query = buildOverpassQuery();
+export async function fetchCafesFromOverpass(area: BBox = VIENNA_FULL_BBOX): Promise<Cafe[]> {
+  const query = buildOverpassQuery(area);
 
   const response = await fetch(OVERPASS_URL, {
     method: "POST",
