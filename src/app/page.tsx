@@ -241,7 +241,7 @@ export default function Home() {
     const now = new Date();
     return { date: format(now, "yyyy-MM-dd"), time: format(now, "HH:mm") };
   });
-  const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(true);
+  const [isCafeSymbolsUpdating, setIsCafeSymbolsUpdating] = useState(false);
   const timeStateRef = useRef(timeState);
   timeStateRef.current = timeState;
   const showSpinner = useCallback(() => {

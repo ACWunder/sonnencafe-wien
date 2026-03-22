@@ -573,7 +573,10 @@ export function MapView({
     }
 
     isBackgroundComputeRef.current = false;
-    if (!incrementalOnly) onSunComputeStartedRef.current?.();
+    // Only show spinner when cafe markers are actually visible (zoom ≥ MIN_MARKER_ZOOM).
+    // Below that zoom markers are hidden anyway — no need to block the UI.
+    const atMarkerZoom = (mapInstanceRef.current?.getZoom() ?? 0) >= MIN_MARKER_ZOOM;
+    if (!incrementalOnly && atMarkerZoom) onSunComputeStartedRef.current?.();
     dispatchSunCompute(cafesToCompute, ts.date, ts.time);
   }
 
