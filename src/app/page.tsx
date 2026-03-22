@@ -216,6 +216,25 @@ function formatMinuteLabel(minute: number): string {
   }).format(new Date(2024, 5, 1, Math.floor(minute / 60), minute % 60));
 }
 
+// ── Module-level cafe JSON promise (starts fetching immediately on page load) ──
+let _cafesJsonPromise: Promise<Cafe[]> | null = null;
+function getCafesJson(): Promise<Cafe[]> {
+  if (!_cafesJsonPromise) {
+    _cafesJsonPromise = fetch("/cafes.json")
+      .then((r) => { if (!r.ok) throw new Error("no static file"); return r.json(); })
+      .then((d: { cafes?: Cafe[] }) => d.cafes ?? [])
+      .catch(() =>
+        fetch("/api/cafes")
+          .then((r) => r.json())
+          .then((d: { cafes?: Cafe[] }) => d.cafes ?? [])
+          .catch(() => [] as Cafe[])
+      );
+  }
+  return _cafesJsonPromise;
+}
+// Kick off the fetch immediately
+getCafesJson();
+
 export default function Home() {
   const sunLocation = DEFAULT_SUN_LOCATION;
   const [timeState, setTimeState] = useState<TimeState>(() => {
@@ -240,6 +259,8 @@ export default function Home() {
   // Tracks whether the /api/cafes fetch has completed at least once.
   // Prevents the spinner disappearing when buildings load before cafes.
   const cafesLoadedRef = useRef(false);
+  // Suppresses spinner during silent background cafe merge.
+  const isBackgroundMergeRef = useRef(false);
 
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
@@ -420,18 +441,31 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Load pre-generated static cafe list — instant from CDN, no Overpass at runtime.
-  // Falls back to the live API if the static file isn't present (e.g. dev without generation).
-  useEffect(() => {
-    fetch("/cafes.json")
-      .then((r) => { if (!r.ok) throw new Error("no static file"); return r.json(); })
-      .then((d) => { cafesLoadedRef.current = true; setCafes(d.cafes ?? []); })
-      .catch(() =>
-        fetch("/api/cafes")
-          .then((r) => r.json())
-          .then((d) => { cafesLoadedRef.current = true; setCafes(d.cafes ?? []); })
-          .catch(() => { cafesLoadedRef.current = true; })
+  // Viewport-first cafe loading: set viewport cafes immediately (spinner goes away),
+  // then silently merge the rest in background without showing spinner.
+  const handleInitialBounds = useCallback((bounds: { south: number; north: number; west: number; east: number }) => {
+    getCafesJson().then((all) => {
+      if (cafesLoadedRef.current) return; // already loaded
+      const buf = 0.5;
+      const dLat = (bounds.north - bounds.south) * buf;
+      const dLng = (bounds.east - bounds.west) * buf;
+      const vpCafes = all.filter((c) =>
+        c.lat >= bounds.south - dLat && c.lat <= bounds.north + dLat &&
+        c.lng >= bounds.west  - dLng && c.lng <= bounds.east  + dLng
       );
+      cafesLoadedRef.current = true;
+      setCafes(vpCafes);
+      // Background: merge remaining cafes without triggering spinner
+      const vpSet = new Set(vpCafes.map((c) => c.id));
+      const rest = all.filter((c) => !vpSet.has(c.id));
+      if (rest.length > 0) {
+        setTimeout(() => {
+          isBackgroundMergeRef.current = true;
+          setCafes((prev) => [...prev, ...rest]);
+          setTimeout(() => { isBackgroundMergeRef.current = false; }, 500);
+        }, 200);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -981,7 +1015,8 @@ export default function Home() {
             onSunTimeline={handleSunTimeline}
             shadowHandleRef={shadowHandleRef}
             onSunDataSettled={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(false); }}
-            onSunComputeStarted={() => { if (cafesLoadedRef.current) setIsCafeSymbolsUpdating(true); }}
+            onSunComputeStarted={() => { if (cafesLoadedRef.current && !isBackgroundMergeRef.current) setIsCafeSymbolsUpdating(true); }}
+            onInitialBounds={handleInitialBounds}
           />
 
           {hasTimeSlider && (
